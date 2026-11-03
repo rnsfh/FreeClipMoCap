@@ -1,0 +1,7 @@
+Scratch/
+dist/
+src/freeclipmocap/wheels/
+src/freeclipmocap/models/
+__pycache__/
+*.pyc
+*.blend1

@@ -1,0 +1,25 @@
+schema_version = "1.0.0"
+
+id = "freeclipmocap"
+version = "0.1.0"
+name = "FreeClipMocap"
+tagline = "Markerless motion capture from video onto any humanoid rig"
+maintainer = "Chevchellioos"
+type = "add-on"
+
+tags = ["Animation"]
+
+blender_version_min = "5.2.0"
+
+license = ["SPDX:GPL-3.0-or-later"]
+copyright = ["2026 rnsfh"]
+
+platforms = ["windows-x64"]
+
+wheels = [
+  "./wheels/mediapipe-1.2.0-py3-none-win_amd64.whl",
+  "./wheels/opencv_contrib_python-5.0.0.93-cp37-abi3-win_amd64.whl",
+]
+
+[permissions]
+files = "Read videos and write landmark caches next to them"

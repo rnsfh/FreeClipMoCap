@@ -1,0 +1,76 @@
+{
+  "format_version": 1,
+  "name": "Rigify",
+  "bones_by_role": {
+    "Hips": "torso",
+    "Spine": "spine_fk.001",
+    "Spine1": "spine_fk.002",
+    "Spine2": "spine_fk.003",
+    "Neck": "neck",
+    "Head": "head",
+    "LeftShoulder": "shoulder.L",
+    "LeftArm": "upper_arm_fk.L",
+    "LeftForeArm": "forearm_fk.L",
+    "LeftHand": "hand_fk.L",
+    "LeftUpLeg": "thigh_fk.L",
+    "LeftLeg": "shin_fk.L",
+    "LeftFoot": "foot_fk.L",
+    "LeftToeBase": "toe_fk.L",
+    "LeftHandThumb1": "thumb.01.L",
+    "LeftHandThumb2": "thumb.02.L",
+    "LeftHandThumb3": "thumb.03.L",
+    "LeftHandIndex1": "f_index.01.L",
+    "LeftHandIndex2": "f_index.02.L",
+    "LeftHandIndex3": "f_index.03.L",
+    "LeftHandMiddle1": "f_middle.01.L",
+    "LeftHandMiddle2": "f_middle.02.L",
+    "LeftHandMiddle3": "f_middle.03.L",
+    "LeftHandRing1": "f_ring.01.L",
+    "LeftHandRing2": "f_ring.02.L",
+    "LeftHandRing3": "f_ring.03.L",
+    "LeftHandPinky1": "f_pinky.01.L",
+    "LeftHandPinky2": "f_pinky.02.L",
+    "LeftHandPinky3": "f_pinky.03.L",
+    "RightShoulder": "shoulder.R",
+    "RightArm": "upper_arm_fk.R",
+    "RightForeArm": "forearm_fk.R",
+    "RightHand": "hand_fk.R",
+    "RightUpLeg": "thigh_fk.R",
+    "RightLeg": "shin_fk.R",
+    "RightFoot": "foot_fk.R",
+    "RightToeBase": "toe_fk.R",
+    "RightHandThumb1": "thumb.01.R",
+    "RightHandThumb2": "thumb.02.R",
+    "RightHandThumb3": "thumb.03.R",
+    "RightHandIndex1": "f_index.01.R",
+    "RightHandIndex2": "f_index.02.R",
+    "RightHandIndex3": "f_index.03.R",
+    "RightHandMiddle1": "f_middle.01.R",
+    "RightHandMiddle2": "f_middle.02.R",
+    "RightHandMiddle3": "f_middle.03.R",
+    "RightHandRing1": "f_ring.01.R",
+    "RightHandRing2": "f_ring.02.R",
+    "RightHandRing3": "f_ring.03.R",
+    "RightHandPinky1": "f_pinky.01.R",
+    "RightHandPinky2": "f_pinky.02.R",
+    "RightHandPinky3": "f_pinky.03.R"
+  },
+  "rig_settings": {
+    "torso": {
+      "head_follow": 0.0,
+      "neck_follow": 0.0
+    },
+    "upper_arm_parent.L": {
+      "IK_FK": 1.0
+    },
+    "thigh_parent.L": {
+      "IK_FK": 1.0
+    },
+    "upper_arm_parent.R": {
+      "IK_FK": 1.0
+    },
+    "thigh_parent.R": {
+      "IK_FK": 1.0
+    }
+  }
+}
