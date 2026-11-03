@@ -27,3 +27,12 @@ FreeClipMocap reads your motion from one ordinary video. What the camera sees de
 - **Leave room around the actor.** Steps toward or away from the camera flatten (depth is the weakest direction).
 - **Start and end with a second of stillness.** It gives clean first and last frames; trim them later with the
   Start/End frames in the panel.
+
+## Two phones (coming: not in the panel yet)
+
+- **Print the board** (saved by the extension) on A4 or Letter, tape it flat on cardboard cut flush with the paper's bottom edge, and measure one square with a ruler.
+- **Phones on stands, 60–90° apart,** both seeing the whole body. They must not move between calibration and the takes they are used for.
+- **Turn video stabilisation off** on both phones; it shifts the picture from frame to frame.
+- **Clap once after both phones are recording.** The clap lines the videos up.
+- **Calibrate:** hold the board close to each phone in turn (about 1 m) and tilt it in several directions, then move it slowly where both phones see it, turned toward the space between them, at 1080p within about 2.5 m. 4K reaches about twice as far.
+- **Floor:** stand the board on its bottom edge on the floor, facing between the phones, still for about 2 seconds (lean it against a box). Without this the floor is taken from the feet.

@@ -109,8 +109,10 @@ Totals: single camera polished (0–3) ≈ 12–23 sessions ≈ 30–100 M token
 
 ## Phase 4: multi-camera
 
-- [ ] Calibration with a printed board (ChArUco; OpenCV's aruco module is in `opencv-contrib-python`).
-- [ ] Video sync (clap in the audio, or a light flash).
+- [x] Calibration with a printed board (2026-11-03, core only, not in the panel yet): ChArUco 4×5 on A4/Letter, each lens, the second phone's pose, the floor from the board standing on it, JSON next to the videos. Tested on synthetic two-camera videos (cameras within 2 cm and 0.5°).
+- [x] Video sync by the sound (2026-11-03, core only): onset cross-correlation, refined by the board during calibration.
+- [ ] Camera list in the panel, Calibrate and Sync buttons, a Blender camera per phone with its video.
+- [ ] First real calibration on the user's two phones.
 - [ ] Triangulation of 2D landmarks from several views; per-view confidence weighting.
 - [ ] UI for several videos.
-- [ ] Floor from the calibration board or the triangulated feet (moved from Phase 2).
+- [ ] Floor from the triangulated feet when no floor shot was found (from the board: done with calibration).

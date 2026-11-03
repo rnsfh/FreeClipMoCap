@@ -179,11 +179,22 @@ Kept free of `bpy` (decided 2026-11-03), so it is tested on its own with Blender
   left/right limbs).
 - **Feet:** contact detection (speed + height), foot locking, ground plane.
 - **Root motion:** hip trajectory, or in place.
-- **Later, multi-camera:** calibration (OpenCV), video sync, triangulation (see Phase 4 in [ROADMAP.md](ROADMAP.md)).
+- **Multi-camera** (Phase 4, in progress): see "Multi-camera" below.
 
 Capture runs on a background thread inside Blender (2026-11-03; to confirm in the UI on a real clip, with a
 separate process of Blender's Python as the fallback). Whether the solver needs a thread too is decided once it
 exists and its speed is known.
+
+### Multi-camera (Phase 4, in progress)
+
+Built so far (2026-11-03), not yet in the panel:
+
+- **Sync** (`solver/audio_sync.py`, `ui/video_audio.py`): each video's sound is read with Blender's `aud` module and turned into a 1 kHz onset curve (rises in loudness, so gain and sample rate do not matter); the curves are cross-correlated and the peak gives how much later the other camera started (within ~1 ms on test sounds). A clap at the start makes the peak sharp.
+- **Board** (`capture/board_detection.py`): ChArUco 4×5, 48 mm nominal, `DICT_4X4_50`; the page image to print (A4, 300 dpi); `detect_board` reads a frame range of a video and records, per frame, the 12 inner corners (NaN where unseen) with the video's own timestamps (`capture/board_sightings.py`).
+- **Calibration** (`capture/camera_calibration.py`): each lens from its own board views, then each further camera against the first: its corners interpolated to the first camera's frame times (start delay from the sound plus a board-based correction of up to ±60 ms), both lenses and the relative pose refined together by OpenCV's `stereoCalibrate`. The floor from a still board standing on it (or lying on it); world axes: Z up, Y the first camera's level view direction, origin on the floor below where the view axes meet.
+- **Result** (`capture/camera_setup.py`): `CameraSetup`, one `CalibratedCamera` per video (OpenCV camera matrix and 5 distortion values, world→camera rotation and translation in OpenCV axes: x right, y down, z forward), how the floor was found and its frames, the fit errors. Saved as JSON next to the first camera's video.
+
+Still to build: the camera list and Blender cameras in the panel, capture of each video (the existing single-camera capture, one cache per video), triangulation into 3D points, the solver reading them, and the floor from the triangulated feet when no floor shot was found.
 
 ### Target rigs
 
