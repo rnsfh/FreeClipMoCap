@@ -58,6 +58,16 @@ def save_board_image(path: Path) -> None:
         raise BoardDetectionError(f"Cannot write the board image to {path}.")
 
 
+def video_frame_rate(video_path: Path) -> float:
+    video = cv2.VideoCapture(str(video_path))
+    try:
+        if not video.isOpened():
+            raise BoardDetectionError(f"Cannot open the video {video_path}.")
+        return video.get(cv2.CAP_PROP_FPS) or _FALLBACK_FRAME_RATE
+    finally:
+        video.release()
+
+
 def detect_board(
     video_path: Path,
     first_frame: int,

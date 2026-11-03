@@ -5,7 +5,7 @@ import bpy
 from ..capture.capture_job import CaptureJob
 from ..capture.landmark_cache import LandmarkCache, cache_path_for, find_current_cache
 
-_MODELS_FOLDER = Path(__file__).resolve().parent.parent / "models"
+MODELS_FOLDER = Path(__file__).resolve().parent.parent / "models"
 _TIMER_INTERVAL_SECONDS = 0.2
 
 
@@ -55,7 +55,7 @@ class CaptureOperator(bpy.types.Operator):
             self.report({"INFO"}, message)
             return {"FINISHED"}
 
-        job = CaptureJob(video_path, settings, _MODELS_FOLDER, cache_path_for(video_path, settings))
+        job = CaptureJob(video_path, settings, MODELS_FOLDER, cache_path_for(video_path, settings))
         capture_state.set_job(job)
         capture_state.set_status_message("")
         job.start()

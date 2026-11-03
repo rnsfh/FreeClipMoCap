@@ -113,8 +113,15 @@ Totals: single camera polished (0–3) ≈ 12–23 sessions ≈ 30–100 M token
 
 - [x] Calibration with a printed board (2026-11-03, core only, not in the panel yet): ChArUco 4×5 on A4/Letter, each lens, the second phone's pose, the floor from the board standing on it, JSON next to the videos. Tested on synthetic two-camera videos (cameras within 2 cm and 0.5°).
 - [x] Video sync by the sound (2026-11-03, core only): onset cross-correlation, refined by the board during calibration.
-- [ ] Camera list in the panel, Calibrate and Sync buttons, a Blender camera per phone with its video.
-- [ ] First real calibration on the user's two phones.
+- [x] Camera list in the panel, Calibrate and Sync buttons, a Blender camera per phone with its video (2026-11-03;
+      tested headless, the panel's look to check in Blender's UI).
+- [x] Board on a tablet screen (Paper: Custom with the distance below the squares) and saved lenses per phone, kept
+      fixed so later calibrations need no close-ups; a typed focal length in mm, kept fixed or corrected by the board
+      (2026-11-03; tested headless on the synthetic videos).
+- [x] Calibration from the body, no board (2026-11-03; tested headless on a synthetic walking actor): the phones'
+      poses from matched body joints, scale from the measured distance between the phones, floor from the feet.
+- [ ] First real calibration on the user's two phones (and the body method compared with the board on the same
+      session).
 - [ ] Triangulation of 2D landmarks from several views; per-view confidence weighting.
 - [ ] UI for several videos.
 - [ ] Floor from the triangulated feet when no floor shot was found (from the board: done with calibration).

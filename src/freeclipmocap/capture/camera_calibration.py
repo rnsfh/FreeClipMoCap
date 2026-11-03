@@ -8,7 +8,8 @@ import numpy as np
 from ..constants import calibration_board
 from .board_detection import board_corner_positions
 from .board_sightings import BoardSightings
-from .camera_setup import CalibratedCamera, CameraSetup, FloorSource
+from .camera_setup import CalibratedCamera, CalibrationInputs, CameraSetup, FloorSource, TypedLens
+from .saved_lens import SavedLens
 
 _FEWEST_CORNERS_FOR_LENS = 8
 _FEWEST_LENS_FRAMES = 10
@@ -21,6 +22,7 @@ _FEWEST_PAIRS = 8
 _MOST_SEARCH_PAIRS = 150
 _MOST_STEREO_PAIRS = 40
 _STEREO_FLAGS = cv2.CALIB_USE_INTRINSIC_GUESS | _LENS_FLAGS
+_FIXED_LENSES_STEREO_FLAGS = cv2.CALIB_FIX_INTRINSIC
 _STEREO_CRITERIA = (cv2.TERM_CRITERIA_COUNT + cv2.TERM_CRITERIA_EPS, 100, 1e-7)
 _LARGEST_PICTURE_DELAY_CORRECTION_SECONDS = 0.06
 _COARSE_DELAY_STEP_SECONDS = 0.004
@@ -86,7 +88,9 @@ class _FloorSighting:
     video_frames: tuple[int, int]
 
 
-def calibrate_lens(sightings: BoardSightings, square_size_metres: float) -> LensCalibration:
+def calibrate_lens(
+    sightings: BoardSightings, square_size_metres: float, starting_camera_matrix: np.ndarray | None = None
+) -> LensCalibration:
     object_corners = board_corner_positions(square_size_metres).astype(np.float32)
     good_frames = np.flatnonzero(sightings.corners_seen >= _FEWEST_CORNERS_FOR_LENS)
     if len(good_frames) < _FEWEST_LENS_FRAMES:
@@ -102,25 +106,70 @@ def calibrate_lens(sightings: BoardSightings, square_size_metres: float) -> Lens
         image_points.append(sightings.corner_points[frame, seen].astype(np.float32))
     image_size = (sightings.image_width, sightings.image_height)
 
-    error, camera_matrix, distortion, per_view_errors = _calibrate_lens_views(object_points, image_points, image_size)
+    error, camera_matrix, distortion, per_view_errors = _calibrate_lens_views(
+        object_points, image_points, image_size, starting_camera_matrix
+    )
     keep = per_view_errors <= max(_OUTLIER_SHARE_OF_MEDIAN * float(np.median(per_view_errors)), _SMALLEST_OUTLIER_PIXELS)
     if not keep.all() and keep.sum() >= _FEWEST_LENS_FRAMES:
         object_points = [points for points, kept in zip(object_points, keep) if kept]
         image_points = [points for points, kept in zip(image_points, keep) if kept]
-        error, camera_matrix, distortion, _per_view_errors = _calibrate_lens_views(object_points, image_points, image_size)
+        error, camera_matrix, distortion, _per_view_errors = _calibrate_lens_views(
+            object_points, image_points, image_size, starting_camera_matrix
+        )
     return LensCalibration(camera_matrix, distortion, error, len(object_points))
 
 
+def saved_lens_calibration(sightings: BoardSightings, saved_lens: SavedLens) -> LensCalibration:
+    if (saved_lens.image_width, saved_lens.image_height) != (sightings.image_width, sightings.image_height):
+        raise CalibrationError(
+            f"{sightings.video_file_name} is {sightings.image_width}×{sightings.image_height}, but the saved lens "
+            f"{saved_lens.name} is for {saved_lens.image_width}×{saved_lens.image_height} video. Pick a lens saved "
+            "at this resolution and orientation, or Measure."
+        )
+    return LensCalibration(saved_lens.camera_matrix, saved_lens.distortion, saved_lens.error_pixels, 0)
+
+
+def typed_lens_calibration(sightings: BoardSightings, typed_lens: TypedLens) -> LensCalibration:
+    width, height = sightings.image_width, sightings.image_height
+    focal_length = typed_lens.focal_length_pixels(width, height)
+    camera_matrix = np.array([[focal_length, 0.0, width / 2.0], [0.0, focal_length, height / 2.0], [0.0, 0.0, 1.0]])
+    return LensCalibration(camera_matrix, np.zeros(5), 0.0, 0)
+
+
+def _first_lens(
+    sightings: BoardSightings, saved_lens: SavedLens | None, typed_lens: TypedLens | None, square_size_metres: float
+) -> LensCalibration:
+    if saved_lens is not None:
+        return saved_lens_calibration(sightings, saved_lens)
+    if typed_lens is None:
+        return calibrate_lens(sightings, square_size_metres)
+    typed = typed_lens_calibration(sightings, typed_lens)
+    if typed_lens.keep_fixed:
+        return typed
+    try:
+        return calibrate_lens(sightings, square_size_metres, typed.camera_matrix)
+    except CalibrationError:
+        # Without close-ups the typed lens goes into the camera pair fit as it is, and that fit refines it.
+        return typed
+
+
 def calibrate_cameras(
-    sightings_per_camera: Sequence[BoardSightings],
-    start_delays_seconds: Sequence[float],
-    square_size_metres: float,
-    paper_height_metres: float,
+    sightings_per_camera: Sequence[BoardSightings], inputs: CalibrationInputs
 ) -> CameraSetup:
     if len(sightings_per_camera) < 2:
         raise CalibrationError("At least two cameras are needed.")
+    start_delays_seconds = inputs.start_delays_seconds
+    square_size_metres = inputs.square_size_metres
+    edge_below_squares_metres = inputs.edge_below_squares_metres
     object_corners = board_corner_positions(square_size_metres)
-    lenses = [calibrate_lens(sightings, square_size_metres) for sightings in sightings_per_camera]
+    lens_is_fixed = [
+        saved_lens is not None or (typed_lens is not None and typed_lens.keep_fixed)
+        for saved_lens, typed_lens in zip(inputs.saved_lenses, inputs.typed_lenses)
+    ]
+    lenses = [
+        _first_lens(sightings, saved_lens, typed_lens, square_size_metres)
+        for sightings, saved_lens, typed_lens in zip(sightings_per_camera, inputs.saved_lenses, inputs.typed_lenses)
+    ]
     reference = sightings_per_camera[0]
 
     relative_rotations = [np.eye(3)]
@@ -130,7 +179,15 @@ def calibrate_cameras(
     refined_lenses = list(lenses)
     for camera_index in range(1, len(sightings_per_camera)):
         other = sightings_per_camera[camera_index]
-        correction, fit = _fit_pair(reference, other, start_delays_seconds[camera_index], lenses[0], lenses[camera_index], object_corners)
+        correction, fit = _fit_pair(
+            reference,
+            other,
+            start_delays_seconds[camera_index],
+            lenses[0],
+            lenses[camera_index],
+            (lens_is_fixed[0], lens_is_fixed[camera_index]),
+            object_corners,
+        )
         relative_rotations.append(fit.rotation)
         relative_translations.append(fit.translation)
         corrections.append(correction)
@@ -148,14 +205,16 @@ def calibrate_cameras(
             lens,
             object_corners,
             square_size_metres,
-            paper_height_metres,
+            edge_below_squares_metres,
             camera_index,
             relative_rotations[camera_index],
             relative_translations[camera_index],
         )
     ]
     floor = max(floor_sightings, key=lambda sighting: sighting.camera_height) if floor_sightings else None
-    world_rotation, world_origin = _world_frame(relative_rotations, relative_translations, floor)
+    world_rotation, world_origin = world_frame(
+        relative_rotations, relative_translations, None if floor is None else floor.normal, None if floor is None else floor.point
+    )
 
     cameras = tuple(
         CalibratedCamera(
@@ -174,8 +233,8 @@ def calibrate_cameras(
         )
     )
     return CameraSetup(
+        inputs=inputs,
         cameras=cameras,
-        square_size_metres=square_size_metres,
         floor_source=FloorSource.NONE if floor is None else floor.source,
         floor_camera_index=None if floor is None else floor.camera_index,
         floor_video_frames=None if floor is None else floor.video_frames,
@@ -184,11 +243,19 @@ def calibrate_cameras(
 
 
 def _calibrate_lens_views(
-    object_points: list[np.ndarray], image_points: list[np.ndarray], image_size: tuple[int, int]
+    object_points: list[np.ndarray],
+    image_points: list[np.ndarray],
+    image_size: tuple[int, int],
+    starting_camera_matrix: np.ndarray | None,
 ) -> tuple[float, np.ndarray, np.ndarray, np.ndarray]:
-    starting_matrix = np.array([[1.0, 0.0, image_size[0] / 2.0], [0.0, 1.0, image_size[1] / 2.0], [0.0, 0.0, 1.0]])
+    if starting_camera_matrix is None:
+        starting_matrix = np.array([[1.0, 0.0, image_size[0] / 2.0], [0.0, 1.0, image_size[1] / 2.0], [0.0, 0.0, 1.0]])
+        flags = _LENS_FLAGS
+    else:
+        starting_matrix = starting_camera_matrix.copy()
+        flags = _LENS_FLAGS | cv2.CALIB_USE_INTRINSIC_GUESS
     error, camera_matrix, distortion, *_poses_and_deviations, per_view_errors = cv2.calibrateCameraExtended(
-        object_points, image_points, image_size, starting_matrix, np.zeros(5), flags=_LENS_FLAGS
+        object_points, image_points, image_size, starting_matrix, np.zeros(5), flags=flags
     )
     return float(error), camera_matrix, distortion.reshape(5), np.asarray(per_view_errors).ravel()
 
@@ -199,6 +266,7 @@ def _fit_pair(
     audio_delay_seconds: float,
     reference_lens: LensCalibration,
     other_lens: LensCalibration,
+    lens_is_fixed: tuple[bool, bool],
     object_corners: np.ndarray,
 ) -> tuple[float, _StereoFit]:
     if _paired_views(reference, other, audio_delay_seconds, object_corners, _MOST_STEREO_PAIRS) is None:
@@ -231,10 +299,10 @@ def _fit_pair(
     views = _paired_views(reference, other, audio_delay_seconds + best_correction, object_corners, _MOST_STEREO_PAIRS)
     if views is None:
         raise CalibrationError(f"{reference.video_file_name} and {other.video_file_name} share too few board sightings.")
-    fit = _stereo_fit(views, reference_lens, other_lens)
+    fit = _stereo_fit(views, reference_lens, other_lens, lens_is_fixed)
     keep = fit.per_pair_errors <= max(_OUTLIER_SHARE_OF_MEDIAN * float(np.median(fit.per_pair_errors)), _SMALLEST_OUTLIER_PIXELS)
     if not keep.all() and keep.sum() >= _FEWEST_PAIRS:
-        fit = _stereo_fit(views.kept(keep), reference_lens, other_lens)
+        fit = _stereo_fit(views.kept(keep), reference_lens, other_lens, lens_is_fixed)
     return best_correction, fit
 
 
@@ -304,7 +372,24 @@ def _board_pose(object_points: np.ndarray, image_points: np.ndarray, lens: LensC
     return rotation, translation.reshape(3)
 
 
-def _stereo_fit(views: _BoardViews, first_lens: LensCalibration, second_lens: LensCalibration) -> _StereoFit:
+def _stereo_fit(
+    views: _BoardViews, first_lens: LensCalibration, second_lens: LensCalibration, lens_is_fixed: tuple[bool, bool]
+) -> _StereoFit:
+    first_is_fixed, second_is_fixed = lens_is_fixed
+    if not first_is_fixed and not second_is_fixed:
+        return _stereo_calibrate(views, first_lens, second_lens, _STEREO_FLAGS)
+    if first_is_fixed != second_is_fixed:
+        # stereoCalibrate fixes both lenses or neither: refine the measured lens with both free, then fit the pose
+        # with the saved lens restored and both fixed.
+        refined = _stereo_calibrate(views, first_lens, second_lens, _STEREO_FLAGS)
+        if first_is_fixed:
+            second_lens = replace(second_lens, camera_matrix=refined.second_camera_matrix, distortion=refined.second_distortion)
+        else:
+            first_lens = replace(first_lens, camera_matrix=refined.first_camera_matrix, distortion=refined.first_distortion)
+    return _stereo_calibrate(views, first_lens, second_lens, _FIXED_LENSES_STEREO_FLAGS)
+
+
+def _stereo_calibrate(views: _BoardViews, first_lens: LensCalibration, second_lens: LensCalibration, flags: int) -> _StereoFit:
     (
         error,
         first_matrix,
@@ -329,7 +414,7 @@ def _stereo_fit(views: _BoardViews, first_lens: LensCalibration, second_lens: Le
         (1, 1),
         np.eye(3),
         np.zeros(3),
-        flags=_STEREO_FLAGS,
+        flags=flags,
         criteria=_STEREO_CRITERIA,
     )
     return _StereoFit(
@@ -349,7 +434,7 @@ def _floor_sightings(
     lens: LensCalibration,
     object_corners: np.ndarray,
     square_size_metres: float,
-    paper_height_metres: float,
+    edge_below_squares_metres: float,
     camera_index: int,
     rotation_from_reference: np.ndarray,
     translation_from_reference: np.ndarray,
@@ -375,7 +460,7 @@ def _floor_sightings(
             mean_corners = np.nanmean(points[first:stop], axis=0)
         seen = np.isfinite(mean_corners[:, 0])
         board_rotation, translation = _board_pose(object_corners[seen], mean_corners[seen], lens)
-        floor = _floor_from_still_board(board_rotation, translation, square_size_metres, paper_height_metres)
+        floor = _floor_from_still_board(board_rotation, translation, square_size_metres, edge_below_squares_metres)
         if floor is None:
             continue
         source, up, point = floor
@@ -395,7 +480,7 @@ def _floor_sightings(
 
 
 def _floor_from_still_board(
-    board_rotation: np.ndarray, translation: np.ndarray, square_size_metres: float, paper_height_metres: float
+    board_rotation: np.ndarray, translation: np.ndarray, square_size_metres: float, edge_below_squares_metres: float
 ) -> tuple[FloorSource, np.ndarray, np.ndarray] | None:
     board_width = calibration_board.SQUARES_ACROSS * square_size_metres
     board_height = calibration_board.SQUARES_DOWN * square_size_metres
@@ -408,11 +493,10 @@ def _floor_from_still_board(
     if normal @ _CAMERA_UP >= largest_tilt_cosine:
         source, up, point = FloorSource.BOARD_FLAT, normal, center
     elif abs(board_down @ -_CAMERA_UP) >= largest_tilt_cosine:
-        # The board is printed centred on the page, so the paper's bottom edge lies one margin below the squares,
-        # whichever way up the board stands.
-        margin = (paper_height_metres - board_height) / 2.0
+        # The edge on the floor lies edge_below_squares_metres beyond the row of squares nearest to it, whichever
+        # way up the board stands (on paper the board is centred, so both margins are the same).
         standing_upright = board_down @ -_CAMERA_UP > 0.0
-        edge_height = board_height + margin if standing_upright else -margin
+        edge_height = board_height + edge_below_squares_metres if standing_upright else -edge_below_squares_metres
         up = -board_down if standing_upright else board_down
         source, point = FloorSource.BOARD_UPRIGHT, board_rotation @ np.array([board_width / 2.0, edge_height, 0.0]) + translation
     else:
@@ -427,12 +511,15 @@ def _runs(flags: np.ndarray) -> list[tuple[int, int]]:
     return list(zip(np.flatnonzero(edges == 1).tolist(), np.flatnonzero(edges == -1).tolist()))
 
 
-def _world_frame(
-    relative_rotations: list[np.ndarray], relative_translations: list[np.ndarray], floor: _FloorSighting | None
+def world_frame(
+    relative_rotations: list[np.ndarray],
+    relative_translations: list[np.ndarray],
+    floor_up: np.ndarray | None,
+    floor_point: np.ndarray | None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    up = floor.normal if floor is not None else _CAMERA_UP
+    up = floor_up if floor_up is not None else _CAMERA_UP
     center = _capture_center(relative_rotations, relative_translations)
-    origin = center - ((center - floor.point) @ up) * up if floor is not None else center
+    origin = center - ((center - floor_point) @ up) * up if floor_point is not None else center
     forward = _CAMERA_FORWARD - (_CAMERA_FORWARD @ up) * up
     if np.linalg.norm(forward) < 1e-6:
         raise CalibrationError("The first camera looks straight down at the floor; it must look across the room.")

@@ -1,3 +1,4 @@
+import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -63,6 +64,7 @@ UPRIGHT_FROM_SECONDS = 2.0 * CLOSE_UP_SECONDS + SHARED_SECONDS
 FLAT_FROM_SECONDS = UPRIGHT_FROM_SECONDS + FLOOR_SHOT_SECONDS
 CALIBRATION_SECONDS = FLAT_FROM_SECONDS + FLOOR_SHOT_SECONDS
 PAPER_HEIGHT_METRES = calibration_board.A4_PAPER_HEIGHT_MILLIMETRES / 1000.0
+EDGE_BELOW_SQUARES_METRES = (PAPER_HEIGHT_METRES - calibration_board.SQUARES_DOWN * SQUARE_SIZE_METRES) / 2.0
 _CLOSE_UP_DISTANCE_METRES = 0.8
 
 
@@ -78,10 +80,36 @@ def calibration_board_pose(time_seconds: float) -> tuple[np.ndarray, np.ndarray]
     return board_on_floor(np.array([0.15, -0.1, 0.0]))
 
 
+SIDE_STARTED_LATER_SECONDS = 0.37
+_shared_videos: tuple[tempfile.TemporaryDirectory, Path, Path] | None = None
+
+
+def shared_calibration_videos() -> tuple[Path, Path]:
+    global _shared_videos
+    if _shared_videos is None:
+        folder = tempfile.TemporaryDirectory()
+        front_video = write_board_video(
+            Path(folder.name) / "front.mp4",
+            FRONT_CAMERA,
+            0.0,
+            int(CALIBRATION_SECONDS * FRAME_RATE),
+            calibration_board_pose,
+        )
+        side_video = write_board_video(
+            Path(folder.name) / "side.mp4",
+            SIDE_CAMERA,
+            SIDE_STARTED_LATER_SECONDS,
+            int((CALIBRATION_SECONDS - SIDE_STARTED_LATER_SECONDS) * FRAME_RATE),
+            calibration_board_pose,
+        )
+        _shared_videos = (folder, front_video, side_video)
+    return _shared_videos[1], _shared_videos[2]
+
+
 def board_standing_on_floor(floor_spot: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     board_height = calibration_board.SQUARES_DOWN * SQUARE_SIZE_METRES
-    paper_margin = (PAPER_HEIGHT_METRES - board_height) / 2.0
-    return board_facing(np.array([floor_spot[0], floor_spot[1], paper_margin + board_height / 2.0]), np.radians(24.0), 0.0, 0.0)
+    center_height = EDGE_BELOW_SQUARES_METRES + board_height / 2.0
+    return board_facing(np.array([floor_spot[0], floor_spot[1], center_height]), np.radians(24.0), 0.0, 0.0)
 
 
 def board_close_to(camera: SyntheticCamera, time_seconds: float) -> tuple[np.ndarray, np.ndarray]:

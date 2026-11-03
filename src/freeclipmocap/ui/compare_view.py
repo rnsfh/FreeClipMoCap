@@ -5,6 +5,7 @@ import numpy as np
 from mathutils import Matrix
 
 from ..capture.landmark_cache import CacheFormatError, LandmarkCache, find_current_cache
+from ..constants.camera_lens import FULL_FRAME_WIDTH_MILLIMETRES
 from ..rig.armature_bone_map import read_bone_map
 from ..solver.camera_fit import CameraFitError, FittedCamera, fit_camera
 from ..solver.mediapipe_table import MEDIAPIPE_TABLE
@@ -15,7 +16,6 @@ from .video_operators import load_video_clip, video_frame_at
 
 _CAMERA_NAME = "FreeClipMocap Camera"
 _SAMPLED_FRAMES = 60
-_SENSOR_WIDTH_MILLIMETRES = 36.0
 _WORLD_UP = np.array([0.0, 0.0, 1.0])
 
 
@@ -92,7 +92,7 @@ def _place_camera(
     camera_data = camera_object.data
     camera_data.type = "PERSP"
     camera_data.sensor_fit = "AUTO"
-    camera_data.sensor_width = _SENSOR_WIDTH_MILLIMETRES
+    camera_data.sensor_width = FULL_FRAME_WIDTH_MILLIMETRES
     camera_data.lens = lens_millimetres
     camera_data.shift_x = 0.0
     camera_data.shift_y = 0.0
@@ -164,7 +164,7 @@ class CompareViewOperator(bpy.types.Operator):
             cache = LandmarkCache.load(cache_path)
             world_points, image_points, used_frames = _paired_points(scene, armature_object, cache)
             focal_length_pixels = (
-                properties.compare_lens_millimetres * max(cache.video.width, cache.video.height) / _SENSOR_WIDTH_MILLIMETRES
+                properties.compare_lens_millimetres * max(cache.video.width, cache.video.height) / FULL_FRAME_WIDTH_MILLIMETRES
             )
             fitted = fit_camera(world_points, image_points, cache.video.width, cache.video.height, focal_length_pixels, _WORLD_UP)
         except (CacheFormatError, CameraFitError) as error:

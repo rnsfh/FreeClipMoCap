@@ -8,6 +8,7 @@ from gpu_extras.batch import batch_for_shader
 from ..capture.landmark_cache import CacheFormatError, LandmarkCache, cache_path_for
 from ..capture.tracked_skeleton import SkeletonPart, tracked_skeleton_lines
 from ..solver.mediapipe_table import MEDIAPIPE_TABLE
+from .video_operators import take_video_paths
 
 _LINE_WIDTH_PIXELS = 2.5
 _COLORS = {
@@ -18,28 +19,27 @@ _COLORS = {
 }
 
 
-class _LoadedCache:
+class _LoadedCaches:
     def __init__(self) -> None:
-        self.path: Path | None = None
-        self.modified_time_nanoseconds = 0
-        self.cache: LandmarkCache | None = None
+        self.caches_by_path: dict[Path, tuple[int, LandmarkCache | None]] = {}
 
     def get(self, path: Path) -> LandmarkCache | None:
         try:
             modified_time_nanoseconds = path.stat().st_mtime_ns
         except OSError:
             return None
-        if path != self.path or modified_time_nanoseconds != self.modified_time_nanoseconds:
-            self.path = path
-            self.modified_time_nanoseconds = modified_time_nanoseconds
+        loaded = self.caches_by_path.get(path)
+        if loaded is None or loaded[0] != modified_time_nanoseconds:
             try:
-                self.cache = LandmarkCache.load(path)
+                cache = LandmarkCache.load(path)
             except (OSError, ValueError, KeyError, CacheFormatError):
-                self.cache = None
-        return self.cache
+                cache = None
+            loaded = (modified_time_nanoseconds, cache)
+            self.caches_by_path[path] = loaded
+        return loaded[1]
 
 
-_loaded_cache = _LoadedCache()
+_loaded_caches = _LoadedCaches()
 _draw_handler: object | None = None
 
 
@@ -59,10 +59,11 @@ def _draw_tracked_skeleton() -> None:
     clip = getattr(space, "clip", None)
     if not properties.show_tracked_skeleton or clip is None or not properties.video_path:
         return
-    video_path = Path(bpy.path.abspath(properties.video_path))
-    if not _same_file(Path(bpy.path.abspath(clip.filepath)), video_path):
+    clip_path = Path(bpy.path.abspath(clip.filepath))
+    video_path = next((path for path in take_video_paths(properties) if _same_file(clip_path, path)), None)
+    if video_path is None:
         return
-    cache = _loaded_cache.get(cache_path_for(video_path, properties.capture_settings()))
+    cache = _loaded_caches.get(cache_path_for(video_path, properties.capture_settings()))
     if cache is None:
         return
     frame_index = scene.frame_current - clip.frame_start

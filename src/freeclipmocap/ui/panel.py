@@ -11,6 +11,21 @@ from .bone_map_operators import (
     SaveBoneMapPresetOperator,
     describe_bone_map,
 )
+from .calibration_operators import (
+    AddCameraVideoOperator,
+    CalibrateOperator,
+    CancelCalibrationOperator,
+    DeleteLensOperator,
+    RemoveCameraVideoOperator,
+    SaveBoardImageOperator,
+    SaveLensOperator,
+    SyncBySoundOperator,
+    calibrated_camera,
+    calibration_state,
+    camera_settings,
+    lens_is_missing_for_body,
+    uses_body,
+)
 from .capture_operators import CancelCaptureOperator, CaptureOperator, capture_state
 from .compare_view import CompareViewOperator
 from .export_operators import ExportBvhOperator, ExportFbxOperator, current_take
@@ -31,7 +46,7 @@ class MainPanel(bpy.types.Panel):
 
         video_box = layout.box()
         video_box.label(text="Video", icon="FILE_MOVIE")
-        video_box.prop(properties, "video_path", text="")
+        self._draw_camera_videos(video_box, properties)
         video_row = video_box.row()
         video_row.operator(ShowVideoOperator.bl_idname, icon="SEQ_PREVIEW")
         video_row.prop(properties, "show_tracked_skeleton")
@@ -42,6 +57,8 @@ class MainPanel(bpy.types.Panel):
         frame_row.prop(properties, "video_end_frame")
         frame_row.operator(SetVideoFrameOperator.bl_idname, text="", icon="EYEDROPPER").edge = "END"
 
+        if properties.extra_videos:
+            self._draw_calibration(layout.box(), context, properties)
         self._draw_target(layout.box(), properties)
         self._draw_capture(layout.box(), properties)
 
@@ -66,6 +83,97 @@ class MainPanel(bpy.types.Panel):
         export_row = export_box.row(align=True)
         export_row.operator(ExportFbxOperator.bl_idname, text="FBX")
         export_row.operator(ExportBvhOperator.bl_idname, text="BVH")
+
+    def _draw_camera_videos(self, box: bpy.types.UILayout, properties: bpy.types.PropertyGroup) -> None:
+        if not properties.extra_videos:
+            box.prop(properties, "video_path", text="")
+        else:
+            first_row = box.row(align=True)
+            first_row.label(text="1")
+            first_row.prop(properties, "video_path", text="")
+            for index, camera in enumerate(properties.extra_videos):
+                row = box.row(align=True)
+                row.label(text=str(index + 2))
+                row.prop(camera, "video_path", text="")
+                row.prop(camera, "started_later_seconds", text="")
+                row.operator(RemoveCameraVideoOperator.bl_idname, text="", icon="X").index = index
+        list_row = box.row(align=True)
+        list_row.operator(AddCameraVideoOperator.bl_idname, icon="ADD")
+        if properties.extra_videos:
+            list_row.operator(SyncBySoundOperator.bl_idname, icon="SOUND")
+
+    def _draw_calibration(self, box: bpy.types.UILayout, context: bpy.types.Context, properties: bpy.types.PropertyGroup) -> None:
+        box.label(text="Calibration", icon="CON_CAMERASOLVER")
+        settings_column = box.column()
+        settings_column.enabled = not calibration_state.is_running
+        settings_column.row().prop(properties, "calibration_method", expand=True)
+        if uses_body(properties):
+            settings_column.prop(properties, "cameras_apart_metres")
+        else:
+            settings_column.operator(SaveBoardImageOperator.bl_idname, icon="FILE_IMAGE")
+            board_row = settings_column.row(align=True)
+            board_row.prop(properties, "board_square_millimetres")
+            board_row.prop(properties, "paper_size", text="")
+            if properties.paper_size == "CUSTOM":
+                settings_column.prop(properties, "board_edge_below_squares_millimetres")
+        self._draw_lenses(settings_column, context, properties)
+        settings_column.prop(properties, "use_separate_calibration_videos")
+        if properties.use_separate_calibration_videos:
+            first_row = settings_column.row(align=True)
+            first_row.label(text="1")
+            first_row.prop(properties, "calibration_video_path", text="")
+            for index, camera in enumerate(properties.extra_videos):
+                row = settings_column.row(align=True)
+                row.label(text=str(index + 2))
+                row.prop(camera, "calibration_video_path", text="")
+        frame_row = settings_column.row(align=True)
+        frame_row.prop(properties, "calibration_start_frame")
+        frame_row.prop(properties, "calibration_end_frame")
+        job = calibration_state.job
+        if job is not None and calibration_state.is_running:
+            progress = job.progress
+            current = progress.current
+            text = f"Camera {progress.camera_index + 1} of {progress.camera_count}: frame {current.frames_done}"
+            if current.expected_frame_count > 0:
+                text += f" of {current.expected_frame_count}"
+            box.progress(factor=progress.fraction, type="BAR", text=text)
+            box.operator(CancelCalibrationOperator.bl_idname, icon="CANCEL")
+        else:
+            box.operator(CalibrateOperator.bl_idname, icon="PLAY")
+        if calibration_state.status_message:
+            message_column = box.column(align=True)
+            for line in _wrapped(calibration_state.status_message):
+                message_column.label(text=line)
+
+    def _draw_lenses(self, column: bpy.types.UILayout, context: bpy.types.Context, properties: bpy.types.PropertyGroup) -> None:
+        column.label(text="Lenses")
+        for camera_index in range(len(properties.extra_videos) + 1):
+            settings = camera_settings(properties, camera_index)
+            row = column.row(align=True)
+            row.label(text=str(camera_index + 1))
+            row.prop(settings, "calibration_lens", text="")
+            camera = calibrated_camera(context, camera_index)
+            save_column = row.column(align=True)
+            save_column.enabled = camera is not None
+            save_column.operator(SaveLensOperator.bl_idname, text="", icon="FILE_TICK").camera_index = camera_index
+            delete_column = row.column(align=True)
+            delete_column.enabled = bool(settings.calibration_lens_name)
+            delete_column.operator(DeleteLensOperator.bl_idname, text="", icon="TRASH").camera_index = camera_index
+            if settings.calibration_lens_is_typed:
+                typed_row = column.row(align=True)
+                typed_row.separator(factor=2.0)
+                typed_row.prop(settings, "calibration_focal_length_millimetres", text="")
+                if not uses_body(properties):
+                    typed_row.prop(settings, "calibration_keep_focal_length", toggle=True)
+            elif uses_body(properties) and lens_is_missing_for_body(settings):
+                missing_row = column.row()
+                missing_row.alert = True
+                missing_row.separator(factor=2.0)
+                missing_row.label(text="Type the focal length or pick a saved lens", icon="ERROR")
+            if camera is not None:
+                measured_row = column.row()
+                measured_row.separator(factor=2.0)
+                measured_row.label(text=f"Last calibration: {camera.focal_length_millimetres:.1f} mm")
 
     def _draw_target(self, box: bpy.types.UILayout, properties: bpy.types.PropertyGroup) -> None:
         box.label(text="Target", icon="ARMATURE_DATA")
@@ -128,6 +236,11 @@ class MainPanel(bpy.types.Panel):
             box.operator(CaptureOperator.bl_idname, icon="PLAY")
         if capture_state.status_message:
             box.label(text=capture_state.status_message)
+
+
+def _wrapped(message: str) -> list[str]:
+    separated = message.replace("; ", ";\n").replace(". ", ".\n")
+    return [line.strip() for line in separated.splitlines() if line.strip()]
 
 
 register, unregister = bpy.utils.register_classes_factory((MainPanel,))

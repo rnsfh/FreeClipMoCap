@@ -1,5 +1,6 @@
 from .ui import (
     bone_map_operators,
+    calibration_operators,
     capture_operators,
     compare_view,
     export_operators,
@@ -17,6 +18,7 @@ _modules = (
     bone_map_operators,
     solve_operator,
     video_operators,
+    calibration_operators,
     compare_view,
     export_operators,
     panel,

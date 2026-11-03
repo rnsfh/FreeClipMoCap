@@ -175,6 +175,36 @@ class VideoClipTests(unittest.TestCase):
                 bpy.data.movieclips.remove(clip)
         self.assertTrue(cv2.__version__)
 
+    def test_a_later_camera_s_clip_starts_by_its_sync_offset(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            video_path = write_moving_shapes_video(Path(folder) / "side.mp4", frame_count=12)
+            clip = load_video_clip(video_path, started_later_seconds=0.37)
+            try:
+                self.assertEqual(clip.frame_start, 1 + round(0.37 * clip.fps))
+                self.assertEqual(load_video_clip(video_path).frame_start, 1)
+            finally:
+                bpy.data.movieclips.remove(clip)
+
+    def test_a_camera_filmed_at_another_frame_rate_stays_in_step_with_camera_1(self) -> None:
+        scene = bpy.context.scene
+        frame_before = scene.frame_current
+        with tempfile.TemporaryDirectory() as folder:
+            video_path = write_moving_shapes_video(Path(folder) / "webcam.mp4", frame_count=120, frame_rate=29.0)
+            clip = load_video_clip(video_path, started_later_seconds=-0.51, first_camera_frame_rate=30.0)
+            try:
+                shown_frames = []
+                for scene_frame in (1, 31, 91):
+                    scene.frame_set(scene_frame)
+                    shown_frames.append(scene_frame - clip.frame_start + 1)
+                expected_frames = [round(((scene_frame - 1) / 30.0 + 0.51) * clip.fps) + 1 for scene_frame in (1, 31, 91)]
+                self.assertEqual(shown_frames, expected_frames)
+                static_clip = load_video_clip(video_path)
+                self.assertIsNone(static_clip.animation_data.drivers.find("frame_start"))
+                self.assertEqual(static_clip.frame_start, 1)
+            finally:
+                scene.frame_set(frame_before)
+                bpy.data.movieclips.remove(clip)
+
     def test_set_buttons_take_the_current_frame_and_keep_start_before_end(self) -> None:
         scene = bpy.context.scene
         properties = scene.freeclipmocap

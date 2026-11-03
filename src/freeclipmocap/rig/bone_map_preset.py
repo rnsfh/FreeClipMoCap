@@ -5,10 +5,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..constants.bone_roles import Role
+from ..constants.user_files import VALID_NAME_PATTERN
 from .bone_map import BoneMap
 
 _FORMAT_VERSION = 1
-_VALID_NAME_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9 _\-]*")
+_VALID_NAME_PATTERN = re.compile(VALID_NAME_PATTERN)
 
 
 class PresetError(Exception):
