@@ -1,7 +1,7 @@
 # FreeClipMocap
 
 Blender extension for markerless motion capture from video, **all Python** (Blender UI, MediaPipe capture, numpy
-solver, keyframing, export). The project was first called BlendMotion (name taken; the repo folder keeps it).
+solver, keyframing, export). The project was first called BlendMotion (name taken); the repo folder is `FreeClipMoCap`.
 Read `README.md` and `Docs/` before starting work; `Docs/DECISIONS.md` lists what is settled and what is still
 open.
 

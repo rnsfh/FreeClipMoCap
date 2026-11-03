@@ -4,6 +4,7 @@ from .tracking_table import (
     Direction,
     FootRule,
     HandRule,
+    JointPoint,
     LandmarkPoint,
     PointSet,
     RigAxis,
@@ -84,6 +85,20 @@ def _side_rules(side: str) -> tuple[RoleRule, ...]:
         ),
         RoleRule(role("Leg"), SolveMode.SWING, Direction(knee, ankle)),
         RoleRule(role("Foot"), SolveMode.SWING, Direction(ankle, foot_index)),
+    )
+
+
+def _side_joint_points(side: str) -> tuple[JointPoint, ...]:
+    return tuple(
+        JointPoint(Role(f"{side}{bone_name}"), _pose(getattr(pose_landmarks, f"{side.upper()}_{landmark_name}")))
+        for bone_name, landmark_name in (
+            ("Arm", "SHOULDER"),
+            ("ForeArm", "ELBOW"),
+            ("Hand", "WRIST"),
+            ("UpLeg", "HIP"),
+            ("Leg", "KNEE"),
+            ("Foot", "ANKLE"),
+        )
     )
 
 
@@ -179,4 +194,5 @@ MEDIAPIPE_TABLE = TrackingTable(
             _pose(pose_landmarks.RIGHT_HEEL, pose_landmarks.RIGHT_FOOT_INDEX),
         ),
     ),
+    joint_points=(*_side_joint_points("Left"), *_side_joint_points("Right")),
 )

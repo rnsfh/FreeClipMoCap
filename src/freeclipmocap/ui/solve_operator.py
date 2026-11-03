@@ -13,6 +13,17 @@ from .capture_operators import capture_state
 from .video_operators import scene_frame_of
 
 
+def leave_edit_mode(context: bpy.types.Context, armature_object: bpy.types.Object) -> bool:
+    if armature_object.mode != "EDIT":
+        return True
+    try:
+        with context.temp_override(active_object=armature_object, object=armature_object):
+            bpy.ops.object.mode_set(mode="OBJECT")
+    except RuntimeError:
+        return False
+    return armature_object.mode != "EDIT"
+
+
 class SolveOperator(bpy.types.Operator):
     bl_idname = "freeclipmocap.solve"
     bl_label = "Solve"
@@ -41,6 +52,10 @@ class SolveOperator(bpy.types.Operator):
             self.report({"ERROR"}, "No capture of this video with these settings yet. Press Capture first.")
             return {"CANCELLED"}
         armature_object = properties.target_armature
+        edit_mode_note = f" Left Edit Mode on {armature_object.name} so the take plays." if armature_object.mode == "EDIT" else ""
+        if not leave_edit_mode(context, armature_object):
+            self.report({"ERROR"}, f"Leave Edit Mode on {armature_object.name} first (Tab); its pose does not play in Edit Mode.")
+            return {"CANCELLED"}
         try:
             cache = LandmarkCache.load(cache_path)
             first_frame = properties.video_start_frame
@@ -95,7 +110,7 @@ class SolveOperator(bpy.types.Operator):
             {"INFO"},
             f"Solved take {action.name} from video frames {first_frame}-{last_frame}: "
             f"{len(take.rotations_by_bone)} bones, {take.frame_count} frames at "
-            f"{frame_rate:.3g} fps; camera tilt corrected by {take.camera_tilt_degrees:.0f}°.{frame_rate_note}",
+            f"{frame_rate:.3g} fps; camera tilt corrected by {take.camera_tilt_degrees:.0f}°.{frame_rate_note}{edit_mode_note}",
         )
         return {"FINISHED"}
 

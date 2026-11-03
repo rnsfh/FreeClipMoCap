@@ -23,8 +23,9 @@ Blender) carries the heavy math.
      heavy capture.
   4. **Solve**: runs the solver and writes an Action on the armature. Options: smoothing, foot lock, in place,
      fingers on/off. Each Solve is a new take (new Action with a fake user); earlier takes are kept.
-  5. **Compare**: the video behind the rig (Blender movie clip), synced to the timeline, to scrub and spot
-     capture errors.
+  5. **Compare**: Show Video (the video beside the viewport, with the tracking drawn on it) and Compare View (a
+     camera fitted to the video, video behind the rig), both synced to the timeline, to scrub and spot capture and
+     solve errors.
   6. **Export**: FBX (LifeInArena's settings, Blender's built-in exporter) and BVH (our own Y-up writer) of the Action.
 - Ships as a Blender extension (`blender_manifest.toml`) with its wheels bundled; Blender installs them. Only
   `mediapipe` and `opencv-contrib-python` are bundled; numpy and certifi come with Blender.
@@ -143,6 +144,23 @@ and Solve sets the scene range to them; the Set buttons (eyedropper) copy the cu
   draws the raw tracking of the current frame over the video, straight from the cache: body green, left hand
   orange, right hand blue, lines to points the tracker marked hidden grey, nothing where tracking was lost. It
   shows what MediaPipe saw, not the solved animation, so capture errors are visible at a glance.
+- **Compare View** (`ui/compare_view.py`, fit in `solver/camera_fit.py`, 2026-11-03): one fixed (tripod) camera
+  that shows the take where the video shows the actor. The tracking table's `joint_points` pair rig joints with
+  tracked points (MediaPipe: shoulders, elbows, wrists, hips, knees, ankles, each the head of its role's bone).
+  Up to 60 frames of the take are sampled; at each, the posed bone heads (evaluated by Blender, so constraints count)
+  are paired with the tracked image points (visibility >= 0.5). The fit (numpy, Levenberg-Marquardt with a numeric
+  Jacobian and Huber-like weights beyond 2% of the video height, 8 starting directions around the rig) finds the
+  camera's position and aim; the **focal length is given** (panel field Lens, 35 mm equivalent, default 26 mm),
+  because from one camera it trades off against distance: on the user's clip any lens from 20 to 70 mm aligned
+  equally well (median 28-30 px on 720p), and a free fit put a 98 mm camera 9 m away below the floor. With 26 mm the
+  camera lands 2.5 m in front of the rig, 0.4-0.5 m up. The camera (`FreeClipMocap Camera`, remembered in the scene
+  properties and updated on each press) uses Blender's 36 mm sensor on the long side, so its Lens equals the
+  setting, and shows the movie clip as a background image (stretched to the frame; the render size is set to the
+  video's so the frame has the video's shape). The largest 3D viewport looks through it as a **local camera**, so
+  the scene's active camera is not changed. The Info line reports the median joint-to-point distance.
+- **Edit Mode:** Blender does not evaluate the pose of an armature in Edit Mode, so a take on it does not play (and
+  Solve's constraint check flagged every bone). Solve and Compare View switch the target armature to Object Mode
+  first and Solve says so (the user, 2026-11-03; LifeInArena's `human_male.blend` is saved in Edit Mode).
 - **FBX:** the target armature and its current take only, baked over the scene range, no leaf bones, built like a
   Mixamo clip (centimetre units, metre-sized values; see DECISIONS.md "FBX scale settings"). The FBX take is named
   after the take and starts at 0 s: during the export the take's keys and the scene range are shifted to start at

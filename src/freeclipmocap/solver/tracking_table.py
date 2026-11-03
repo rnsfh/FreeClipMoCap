@@ -71,6 +71,12 @@ class FootRule:
 
 
 @dataclass(frozen=True, slots=True)
+class JointPoint:
+    role: Role
+    point: LandmarkPoint
+
+
+@dataclass(frozen=True, slots=True)
 class TrackingTable:
     tracking_model: str
     minimum_visibility: float
@@ -82,3 +88,4 @@ class TrackingTable:
     role_rules: tuple[RoleRule, ...]
     hand_rules: tuple[HandRule, ...]
     foot_rules: tuple[FootRule, ...]
+    joint_points: tuple[JointPoint, ...]

@@ -12,6 +12,7 @@ from .bone_map_operators import (
     describe_bone_map,
 )
 from .capture_operators import CancelCaptureOperator, CaptureOperator, capture_state
+from .compare_view import CompareViewOperator
 from .export_operators import ExportBvhOperator, ExportFbxOperator, current_take
 from .solve_operator import SolveOperator
 from .video_operators import SetVideoFrameOperator, ShowVideoOperator
@@ -54,6 +55,9 @@ class MainPanel(bpy.types.Panel):
         tolerance_column.enabled = properties.reduce_keys
         tolerance_column.prop(properties, "key_tolerance_degrees")
         solve_box.operator(SolveOperator.bl_idname, icon="ACTION")
+        compare_row = solve_box.row(align=True)
+        compare_row.operator(CompareViewOperator.bl_idname, icon="VIEW_CAMERA")
+        compare_row.prop(properties, "compare_lens_millimetres")
 
         export_box = layout.box()
         export_box.label(text="Export", icon="EXPORT")

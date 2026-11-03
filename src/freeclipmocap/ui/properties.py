@@ -116,6 +116,20 @@ class FreeClipMocapProperties(bpy.types.PropertyGroup):
         default=2.0,
         precision=2,
     )
+    compare_lens_millimetres: bpy.props.FloatProperty(
+        name="Lens",
+        description="Focal length of the camera that filmed the video, 35 mm equivalent; 26 mm is a phone's main camera",
+        min=8.0,
+        max=600.0,
+        default=26.0,
+        subtype="DISTANCE_CAMERA",
+        unit="CAMERA",
+    )
+    compare_camera: bpy.props.PointerProperty(
+        name="Compare Camera",
+        description="Camera made by Compare View; pressing it again updates this camera",
+        type=bpy.types.Object,
+    )
     bone_map_preset: bpy.props.EnumProperty(name="Preset", description="Bone map preset", items=bone_map_preset_items)
     show_bone_map: bpy.props.BoolProperty(name="Bone Map", default=False)
     show_left_fingers: bpy.props.BoolProperty(name="Left Fingers", default=False)

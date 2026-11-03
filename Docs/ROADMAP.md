@@ -77,8 +77,9 @@ Totals: single camera polished (0–3) ≈ 12–23 sessions ≈ 30–100 M token
       clip (was 1% / 12%). Gaps blended over time. Open: MediaPipe's finger points are very jittery on hands ~30 px
       from wrist to knuckle (720p, full body in frame). The user chose a filming note over filters
       ([FILMING.md](FILMING.md): 1080p/4K, hands at least ~120 px); to re-check on a sharper clip.
-- [ ] Compare view: video behind the rig through a camera (beside the rig with the tracked skeleton drawn on it: done
-      in Phase 1).
+- [x] Compare view: video behind the rig through a camera fitted to the clip, Lens setting (2026-11-03; beside the
+      rig with the tracked skeleton drawn on it: done in Phase 1). On the user's clip with the human hero: joints a
+      median 29 px (4% of the height) from the tracked points; to look at in Blender's UI.
 - [x] Tracking-failure repair: finger poses no longer snap when a hand is found again (gap blending); impossible
       finger bends clamped by joint limits (2026-11-03).
 - [ ] ~~Ground plane from the feet instead of leveling by the torso~~ moved to Phase 4 (the user, 2026-11-03): on the

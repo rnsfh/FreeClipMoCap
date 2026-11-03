@@ -224,6 +224,17 @@ class SolveOperatorTests(unittest.TestCase):
             scene.frame_set(frame)
             self.assertAlmostEqual(np.degrees(Quaternion(forearm.rotation_quaternion).angle), 90.0, delta=0.5)
 
+    def test_an_armature_in_edit_mode_is_switched_to_object_mode_so_the_take_plays(self) -> None:
+        bpy.context.view_layer.objects.active = self.armature_object
+        bpy.ops.object.mode_set(mode="EDIT")
+        self.assertEqual(bpy.ops.freeclipmocap.solve(), {"FINISHED"})
+        self.assertEqual(self.armature_object.mode, "OBJECT")
+        bpy.context.scene.frame_set(31)
+        pose_bones = self.armature_object.pose.bones
+        wrist = self.armature_object.matrix_world @ pose_bones["mixamorig:LeftHand"].head
+        elbow = self.armature_object.matrix_world @ pose_bones["mixamorig:LeftForeArm"].head
+        self.assertLess((wrist - elbow).normalized().y, -0.99)
+
     def test_start_after_end_is_refused(self) -> None:
         properties = bpy.context.scene.freeclipmocap
         properties.video_start_frame = 20
