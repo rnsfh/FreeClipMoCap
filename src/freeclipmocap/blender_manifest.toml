@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "freeclipmocap"
-version = "0.1.0"
+version = "0.2.0"
 name = "FreeClipMocap"
 tagline = "Markerless motion capture from video onto any humanoid rig"
 maintainer = "Chevchellioos"
