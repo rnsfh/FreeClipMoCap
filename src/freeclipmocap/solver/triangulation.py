@@ -20,7 +20,7 @@ _TORSO_POINTS = [
 ]
 # The calibration's world has x to the right, y along camera 1's level view and z up. The solver reads MediaPipe's
 # axes (x right, y down, z away from the camera), so the triangulated body is handed over as a level camera 1 sees it.
-_WORLD_TO_TRACKER_AXES = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])
+WORLD_TO_TRACKER_AXES = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])
 
 
 class TriangulationError(Exception):
@@ -76,7 +76,7 @@ def triangulated_cache(
     pose = PoseTrack(
         found=torso_found,
         image_landmarks=reference.pose.image_landmarks,
-        world_landmarks=(body @ _WORLD_TO_TRACKER_AXES.T).astype(np.float32),
+        world_landmarks=(body @ WORLD_TO_TRACKER_AXES.T).astype(np.float32),
         visibility=np.isfinite(body[..., 0]).astype(np.float32),
         presence=np.isfinite(body[..., 0]).astype(np.float32),
     )
@@ -236,7 +236,7 @@ def _hand_track(
     track = HandTrack(
         found=found,
         image_landmarks=reference_track.image_landmarks,
-        world_landmarks=(hands @ _WORLD_TO_TRACKER_AXES.T).astype(np.float32),
+        world_landmarks=(hands @ WORLD_TO_TRACKER_AXES.T).astype(np.float32),
         score=np.where(found, 1.0, np.nan).astype(np.float32),
     )
     frame_count = max(len(found), 1)

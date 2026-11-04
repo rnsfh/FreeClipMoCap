@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 import wave
+from dataclasses import replace
 from pathlib import Path
 
 import bpy
@@ -9,7 +10,7 @@ from bpy_extras.object_utils import world_to_camera_view
 from mathutils import Vector
 
 from bl_ext.user_default.freeclipmocap.capture.calibration_job import CalibrationJob
-from bl_ext.user_default.freeclipmocap.capture.camera_setup import calibration_path_for
+from bl_ext.user_default.freeclipmocap.capture.camera_setup import CameraSetup, FloorSource, calibration_path_for
 from bl_ext.user_default.freeclipmocap.capture.landmark_cache import cache_path_for
 from bl_ext.user_default.freeclipmocap.constants.camera_lens import FULL_FRAME_WIDTH_MILLIMETRES
 from bl_ext.user_default.freeclipmocap.capture.saved_lens import SavedLens, lens_path
@@ -18,6 +19,7 @@ from bl_ext.user_default.freeclipmocap.ui.calibration_operators import (
     apply_camera_setup,
     calibration_request,
     calibration_state,
+    captured_take,
     describe_setup,
     reuse_saved_calibration,
 )
@@ -193,6 +195,25 @@ class MultiCameraTests(unittest.TestCase):
         self.assertIn("mm (typed)", message)
         for calibrated, filmed in zip(job.setup.cameras, (body_fixtures.FRONT_CAMERA, body_fixtures.SIDE_CAMERA)):
             self.assertLess(np.linalg.norm(calibrated.position - filmed.position), 0.04)
+
+    def test_calibrate_adds_the_floor_from_the_captured_take_to_a_saved_calibration_without_one(self) -> None:
+        self.synthetic_take_for_the_body()
+        self.type_the_lenses_and_distance()
+        self.assertIsNone(self.calibrated_job().error_message)
+        video_paths, inputs = calibration_request(self.properties)
+        setup_path = calibration_path_for(video_paths[0])
+        calibrated = CameraSetup.load(setup_path)
+        tilt = np.array([[1.0, 0.0, 0.0], [0.0, np.cos(0.12), -np.sin(0.12)], [0.0, np.sin(0.12), np.cos(0.12)]])
+        tilted_cameras = tuple(replace(camera, rotation=camera.rotation @ tilt.T) for camera in calibrated.cameras)
+        replace(calibrated, cameras=tilted_cameras, floor_source=FloorSource.NONE).save(setup_path)
+
+        message = reuse_saved_calibration(bpy.context, video_paths, inputs, captured_take(self.properties))
+
+        self.assertIn("floor from the feet", message)
+        saved = CameraSetup.load(setup_path)
+        self.assertEqual(saved.floor_source, FloorSource.FEET)
+        for camera, filmed in zip(saved.cameras, (body_fixtures.FRONT_CAMERA, body_fixtures.SIDE_CAMERA)):
+            self.assertLess(np.linalg.norm(camera.position - filmed.position), 0.06)
 
     def test_solve_with_all_cameras_triangulates_the_calibrated_take(self) -> None:
         self.synthetic_take_for_the_body()

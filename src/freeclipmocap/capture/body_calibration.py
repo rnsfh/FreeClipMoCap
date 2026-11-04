@@ -1,11 +1,12 @@
 import warnings
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import cv2
 import numpy as np
 
 from ..constants import pose_landmarks
+from ..solver.triangulation import WORLD_TO_TRACKER_AXES, triangulated_cache
 from .camera_calibration import CalibrationError, world_frame
 from .camera_setup import CalibratedCamera, CalibrationInputs, CameraSetup, FloorSource, TypedLens
 from .landmark_cache import LandmarkCache
@@ -450,6 +451,31 @@ def _least_squares(residuals: Callable[[np.ndarray], np.ndarray], parameters: np
         if not improved or converged:
             break
     return parameters
+
+
+def with_floor_from_the_take(
+    setup: CameraSetup, take_caches: Sequence[LandmarkCache], start_delays_seconds: Sequence[float]
+) -> CameraSetup:
+    take, _report = triangulated_cache(take_caches, setup.cameras, start_delays_seconds)
+    world_points = take.pose.world_landmarks.astype(np.float64)[:, _BODY_POINTS] @ WORLD_TO_TRACKER_AXES
+    floor_up, floor_point = _floor_from_feet(world_points, take.timestamps_milliseconds / 1000.0)
+    reference = setup.cameras[0]
+    relative_rotations = [camera.rotation @ reference.rotation.T for camera in setup.cameras]
+    relative_translations = [
+        camera.translation - relative_rotation @ reference.translation
+        for camera, relative_rotation in zip(setup.cameras, relative_rotations)
+    ]
+    world_rotation, world_origin = world_frame(
+        relative_rotations,
+        relative_translations,
+        reference.rotation @ floor_up,
+        reference.rotation @ floor_point + reference.translation,
+    )
+    cameras = tuple(
+        replace(camera, rotation=relative_rotation @ world_rotation, translation=relative_rotation @ world_origin + relative_translation)
+        for camera, relative_rotation, relative_translation in zip(setup.cameras, relative_rotations, relative_translations)
+    )
+    return replace(setup, cameras=cameras, floor_source=FloorSource.FEET, floor_camera_index=None, floor_video_frames=None)
 
 
 def _floor_from_feet(world_points: np.ndarray, times_seconds: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

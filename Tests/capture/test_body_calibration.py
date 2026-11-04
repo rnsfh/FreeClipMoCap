@@ -5,10 +5,11 @@ from pathlib import Path
 
 import numpy as np
 
-from bl_ext.user_default.freeclipmocap.capture.body_calibration import calibrate_cameras_from_bodies
+from bl_ext.user_default.freeclipmocap.capture.body_calibration import calibrate_cameras_from_bodies, with_floor_from_the_take
 from bl_ext.user_default.freeclipmocap.capture.camera_calibration import CalibrationError
 from bl_ext.user_default.freeclipmocap.capture.camera_setup import (
     BodyCalibrationInputs,
+    CalibratedCamera,
     CalibrationInputs,
     CalibrationVideo,
     CameraSetup,
@@ -72,6 +73,39 @@ class BodyCalibrationTests(unittest.TestCase):
         for calibrated, filmed in zip(setup.cameras, filmed_cameras):
             self.assertLess(np.linalg.norm(calibrated.position - filmed.position), largest_position_error_metres)
             self.assertLess(rotation_difference_degrees(calibrated.rotation, filmed.rotation), _LARGEST_ROTATION_ERROR_DEGREES)
+
+    def test_a_calibration_without_a_floor_gets_it_from_the_captured_take(self) -> None:
+        tilt = np.array([[1.0, 0.0, 0.0], [0.0, np.cos(0.15), -np.sin(0.15)], [0.0, np.sin(0.15), np.cos(0.15)]])
+        shift = np.array([0.3, -0.2, 0.5])
+        cameras = []
+        for filmed, name in zip((fixtures.FRONT_CAMERA, fixtures.SIDE_CAMERA), _VIDEO_NAMES):
+            rotation = filmed.rotation @ tilt.T
+            cameras.append(
+                CalibratedCamera(
+                    video_file_name=name,
+                    image_width=fixtures.WIDTH,
+                    image_height=fixtures.HEIGHT,
+                    camera_matrix=filmed.camera_matrix,
+                    distortion=np.zeros(5),
+                    rotation=rotation,
+                    translation=filmed.translation - rotation @ shift,
+                    lens_error_pixels=0.0,
+                    picture_delay_correction_seconds=0.0,
+                )
+            )
+        without_floor = CameraSetup(
+            inputs=self.two_camera_inputs(),
+            cameras=tuple(cameras),
+            floor_source=FloorSource.NONE,
+            floor_camera_index=None,
+            floor_video_frames=None,
+            pair_error_pixels=(1.0,),
+        )
+
+        setup = with_floor_from_the_take(without_floor, [self.front, self.side], (0.0, fixtures.SIDE_STARTED_LATER_SECONDS))
+
+        self.assertEqual(setup.floor_source, FloorSource.FEET)
+        self.assert_matches_the_filmed_cameras(setup, (fixtures.FRONT_CAMERA, fixtures.SIDE_CAMERA), _LARGEST_POSITION_ERROR_METRES)
 
     def test_finds_both_cameras_and_the_floor_from_the_walking_actor(self) -> None:
         setup = calibrate_cameras_from_bodies([self.front, self.side], _VIDEO_NAMES[:2], self.two_camera_inputs())

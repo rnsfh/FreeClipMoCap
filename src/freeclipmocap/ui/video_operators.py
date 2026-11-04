@@ -14,7 +14,12 @@ def load_video_clip(
     if clip.animation_data is not None:
         clip.driver_remove("frame_start")
     frame_rate = clip.fps
-    if first_camera_frame_rate is None or abs(frame_rate / first_camera_frame_rate - 1.0) < _SAME_FRAME_RATE_SHARE:
+    if (
+        first_camera_frame_rate is None
+        or first_camera_frame_rate <= 0.0
+        or frame_rate <= 0.0
+        or abs(frame_rate / first_camera_frame_rate - 1.0) < _SAME_FRAME_RATE_SHARE
+    ):
         clip.frame_start = _FIRST_VIDEO_SCENE_FRAME + int(round(started_later_seconds * frame_rate))
         return clip
     # Blender shows one clip frame per scene frame, so a video filmed at another frame rate would drift away from

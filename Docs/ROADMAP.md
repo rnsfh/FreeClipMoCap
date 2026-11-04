@@ -134,4 +134,5 @@ Totals: single camera polished (0–3) ≈ 12–23 sessions ≈ 30–100 M token
 - [x] Single-camera depth repair, legs only (2026-11-04): each leg joint on its 2D point, placed in depth by the
       lens and bone lengths, only toward/away from MediaPipe; one-camera leveling by the whole body. Phone take:
       whole body 4.6° from vertical (was 10.3°), knees 8° / 9° (was 36° / 33°).
-- [ ] Floor from the triangulated feet when no floor shot was found (from the board: done with calibration).
+- [x] Floor from the triangulated feet when no floor shot was found (2026-11-04, at Calibrate, the user's choice).
+- [x] Picture-delay search checked on the user's webcam (2026-11-04): ±150 ms found −66 ms against −63.5 ms within ±60 ms, the fit unchanged (1.78 px), so ±60 ms stays.

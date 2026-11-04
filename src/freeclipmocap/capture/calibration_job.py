@@ -1,13 +1,43 @@
 import math
 import threading
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 from .camera_setup import CalibrationInputs, CameraSetup
+from .capture_settings import CaptureSettings
 from .capture_progress import CaptureCancelled, CaptureProgress
 from .landmark_cache import LandmarkCache, cache_path_for, find_current_cache
 
 _RANGE_MARGIN_SECONDS = 1.0
+
+
+@dataclass(frozen=True, slots=True)
+class CapturedTake:
+    video_paths: tuple[Path, ...]
+    start_delays_seconds: tuple[float, ...]
+    capture_settings: CaptureSettings
+
+    def caches(self) -> list[LandmarkCache] | None:
+        cache_paths = [find_current_cache(video_path, self.capture_settings) for video_path in self.video_paths]
+        if any(cache_path is None for cache_path in cache_paths):
+            return None
+        return [LandmarkCache.load(cache_path) for cache_path in cache_paths]
+
+
+def with_floor_from_captured_take(setup: CameraSetup, take: CapturedTake | None) -> CameraSetup:
+    if setup.floor_found or take is None:
+        return setup
+    caches = take.caches()
+    if caches is None or len(caches) != len(setup.cameras):
+        return setup
+    from .body_calibration import with_floor_from_the_take
+    from .camera_calibration import CalibrationError
+
+    try:
+        return with_floor_from_the_take(setup, caches, take.start_delays_seconds)
+    except CalibrationError:
+        return setup
 
 
 class CalibrationProgress:
@@ -28,12 +58,18 @@ class CalibrationProgress:
 
 class CalibrationJob:
     def __init__(
-        self, video_paths: Sequence[Path], inputs: CalibrationInputs, setup_path: Path, models_folder: Path | None = None
+        self,
+        video_paths: Sequence[Path],
+        inputs: CalibrationInputs,
+        setup_path: Path,
+        models_folder: Path | None = None,
+        captured_take: CapturedTake | None = None,
     ) -> None:
         self.video_paths = list(video_paths)
         self.inputs = inputs
         self.setup_path = setup_path
         self.models_folder = models_folder
+        self.captured_take = captured_take
         self.progress = CalibrationProgress(len(self.video_paths))
         self.setup: CameraSetup | None = None
         self.error_message: str | None = None
@@ -57,6 +93,7 @@ class CalibrationJob:
     def _run(self) -> None:
         try:
             setup = self._calibrate_from_bodies() if self.inputs.uses_body else self._calibrate_from_the_board()
+            setup = with_floor_from_captured_take(setup, self.captured_take)
             setup.save(self.setup_path)
             self.setup = setup
         except CaptureCancelled:

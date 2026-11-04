@@ -4,7 +4,7 @@ from pathlib import Path
 import bpy
 from bpy_extras.io_utils import ExportHelper
 
-from ..capture.calibration_job import CalibrationJob
+from ..capture.calibration_job import CalibrationJob, CapturedTake, with_floor_from_captured_take
 from ..capture.camera_setup import (
     BodyCalibrationInputs,
     CalibratedCamera,
@@ -206,7 +206,7 @@ def describe_setup(setup: CameraSetup) -> str:
     elif setup.floor_found:
         floor = f"floor from {_FLOOR_DESCRIPTIONS[setup.floor_source]}"
     else:
-        floor = "no floor shot found, the floor will come from the feet"
+        floor = "no floor shot found: Capture the take and press Calibrate again to find the floor from the feet"
     corrections = "".join(
         f" Camera {camera_index}'s sound offset corrected by {1000.0 * camera.picture_delay_correction_seconds:+.0f} ms."
         for camera_index, camera in enumerate(setup.cameras, start=1)
@@ -231,10 +231,24 @@ def apply_camera_setup(context: bpy.types.Context, setup: CameraSetup) -> str:
     return ""
 
 
-def reuse_saved_calibration(context: bpy.types.Context, video_paths: Sequence[Path], inputs: CalibrationInputs) -> str | None:
-    saved_setup = find_current_setup(calibration_path_for(video_paths[0]), inputs)
+def captured_take(properties: bpy.types.PropertyGroup) -> CapturedTake:
+    return CapturedTake(
+        tuple(take_video_paths(properties)), tuple(take_start_delays_seconds(properties)), properties.capture_settings()
+    )
+
+
+def reuse_saved_calibration(
+    context: bpy.types.Context, video_paths: Sequence[Path], inputs: CalibrationInputs, take: CapturedTake | None = None
+) -> str | None:
+    setup_path = calibration_path_for(video_paths[0])
+    saved_setup = find_current_setup(setup_path, inputs)
     if saved_setup is None:
         return None
+    if not saved_setup.floor_found:
+        with_floor = with_floor_from_captured_take(saved_setup, take)
+        if with_floor.floor_found:
+            with_floor.save(setup_path)
+            saved_setup = with_floor
     message = f"Reused the saved calibration. {describe_setup(saved_setup)}{apply_camera_setup(context, saved_setup)}"
     calibration_state.set_status_message(message)
     return message
@@ -430,12 +444,13 @@ class CalibrateOperator(bpy.types.Operator):
         except CalibrationRequestError as error:
             self.report({"ERROR"}, str(error))
             return {"CANCELLED"}
-        reuse_message = reuse_saved_calibration(context, video_paths, inputs)
+        take = captured_take(properties)
+        reuse_message = reuse_saved_calibration(context, video_paths, inputs, take)
         if reuse_message is not None:
             self.report({"INFO"}, reuse_message)
             return {"FINISHED"}
 
-        job = CalibrationJob(video_paths, inputs, calibration_path_for(video_paths[0]), MODELS_FOLDER)
+        job = CalibrationJob(video_paths, inputs, calibration_path_for(video_paths[0]), MODELS_FOLDER, take)
         calibration_state.set_job(job)
         calibration_state.set_status_message("")
         job.start()
