@@ -57,6 +57,8 @@ Source: https://www.blendernation.com/2022/06/08/blendarmocap-free-motion-captur
 Source: https://pypi.org/pypi/mediapipe/1.2.0/json
 
 - Latest **1.2.0**, uploaded 2026-10-27. Major jump from the 0.10.x line: verify the API in Phase 0.
+- **1.2.2** checked 2026-11-04: same dependencies, still the telemetry address in `libmediapipe.dll` and the
+  top-level matplotlib import in `drawing_utils.py`; all 163 tests pass on it.
 - Wheels are `py3-none-<platform>` (not tied to a CPython version): `win_amd64`, `win_arm64`,
   `manylinux_2_28_x86_64`, `manylinux_2_28_aarch64`, `macosx_11_0_arm64`. `requires_python` not set.
 - Dependencies: `absl-py~=2.3`, `certifi`, `numpy`, `sounddevice~=0.5`, `flatbuffers~=25.9`,
@@ -107,7 +109,7 @@ The PyPI wheels of MediaPipe (0.10.35 and later, including **1.2.0**) report usa
 - 0.10.21 was reported clean; others pinned `mediapipe<=0.10.21` to avoid it.
 - What it reports (from the Python `BaseOptions`): host environment (Python), OS, Python version, plus a CA bundle
   path for HTTPS (why `certifi` is a dependency). Event contents beyond that are not known.
-- **Patch:** the wheel repack tool (`Tools/repack_mediapipe_wheel.py`; first written in C# as
+- **Patch (removed 2026-11-04, see "extensions.blender.org review"):** the wheel repack tool (`Tools/repack_mediapipe_wheel.py`; first written in C# as
   `PatchMediaPipeTelemetry.cs`, retired 2026-11-03) replaces the single occurrence of `https://play.googleapis.com/log`
   with the same-length `https://127.0.0.1:1/blocked0000` (local, refused at once, no DNS lookup). 1.2.0 `win_amd64`
   DLL SHA-256: original `C979DF9F…11D8`, patched `A521BBA6…B8D4`. The only other `googleapis` strings are protobuf
@@ -116,7 +118,7 @@ The PyPI wheels of MediaPipe (0.10.35 and later, including **1.2.0**) report usa
   4 connection attempts, all to `127.0.0.1:1`, made **60 s after the tasks were created** (one per task); no other
   connections, no Google/Hugging Face entries in the DNS cache.
 - Importing MediaPipe imports matplotlib (`drawing_utils`), which writes a font cache to `%LOCALAPPDATA%\matplotlib`.
-  Avoided by the lazy-import patch in `drawing_utils.py` (see "Dependencies" below).
+  Avoided by a lazy-import patch until 2026-11-04; since matplotlib is bundled, the cache is written again.
 - **The logger also flushes when a task is closed**, not only after 60 s: in the offline chain dry run
   (2026-11-02), each of the two tasks made one attempt to `127.0.0.1:1` at the moment it was closed (~5 s into
   the run). Both refused locally; the patch covers this path too.
@@ -130,14 +132,26 @@ packages on disk) in `offline_chain_test.py`.
 | Package (+ its dependencies) | Wheels | Used by | Result |
 |---|---|---|---|
 | sounddevice (+ cffi, pycparser) | 1.2 MB | Audio tasks only; import already in `try/except ImportError` | Dropped |
-| matplotlib (+ contourpy, cycler, fonttools, kiwisolver, packaging, pillow, pyparsing, python-dateutil, tzdata) | 19.6 MB (~75 MB unpacked) | `drawing_utils.plot_landmarks` (debug 3D plot); but `vision/__init__.py` imports it unconditionally | Dropped; bundled `drawing_utils.py` patched to import it inside `plot_landmarks` only (2026-11-03). An earlier `sys.modules` stand-in broke the extension guidelines |
+| matplotlib (+ contourpy, cycler, fonttools, kiwisolver, packaging, pillow, pyparsing, python-dateutil, tzdata) | 19.6 MB (~75 MB unpacked) | `drawing_utils.plot_landmarks` (debug 3D plot); but `vision/__init__.py` imports it unconditionally | Dropped with a lazy-import patch (2026-11-03); **bundled since 2026-11-04** (unchanged wheels), except packaging, which Blender ships |
 | absl-py, flatbuffers | 0.16 MB | CLI tool, tests, metadata writers; never loaded on our path | Dropped |
 | certifi | — | `base_options.py` (CA bundle for the telemetry upload) | Blender 5.2 ships its own (2025.04.26) |
 | numpy | — | everything | Blender's 2.3.4 |
 | opencv-contrib-python | 52.6 MB | MediaPipe's `drawing_utils`; our video decoding | Kept |
 | mediapipe | 23.9 MB | — | Kept |
 
-Bundled wheels: ~76 MB instead of ~98 MB; unpacked 207 MB instead of 290 MB.
+Bundled wheels: ~76 MB instead of ~98 MB; unpacked 207 MB instead of 290 MB. Since 2026-11-04: 99 MB of wheels
+(MediaPipe 1.2.2 + OpenCV + matplotlib and its dependencies), zip 147 MB.
+
+## extensions.blender.org review (2026-11-04)
+
+0.2.0 (patched MediaPipe 1.2.0) was declined by a moderator: "We cannot host modified version of something like
+MediaPipe, and we do not have enough resources to be reviewing it for each version to make sure its safe and
+suitable for the platform. Custom MediaPipe implementation disqualifies this extension." So any changed MediaPipe
+(patched wheel or a build from source) is out on that platform.
+
+- Blender's installer unpacks the wheels itself: fonttools' `fonttools-4.68.0.data/` (command-line scripts, a man
+  page) lands in `site-packages` too. Harmless; the build's package check skips `.data` folders.
+- The matplotlib wheel statically links FreeType and Qhull, with no licence text for them inside the wheel.
 
 ## C# subprocess link (checked 2026-11-02, Phase 0; superseded 2026-11-03 by the all-Python decision)
 

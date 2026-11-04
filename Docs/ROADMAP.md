@@ -12,7 +12,7 @@ The bottleneck is testing with real footage (the user films, both review), not w
 | 0. Feasibility | MediaPipe inside Blender's Python, dependencies, offline test | 1 | 1 day |
 | 1. MVP | Video → body animation on a Mixamo rig, bone map, smoothing, FBX/BVH export | 4–8 | 1–2 weeks with Phase 0 |
 | 2. Quality | Foot lock, in place, fingers, compare overlay, failure repair, more rig presets, tuning on real clips | 5–10 | 3–5 weeks for Phases 0–3 |
-| 3. Packaging | Manifest, patched + bundled wheels, docs, Windows build, submission | 2–4 | (included above) |
+| 3. Packaging | Manifest, bundled wheels, docs, Windows build, submission | 2–4 | (included above) |
 | 4. Multi-camera | Calibration board, video sync, triangulation, UI | 6–12 | another 3–6 weeks |
 
 Totals: single camera polished (0–3) ≈ 12–23 sessions ≈ 30–100 M tokens processed; with multi-camera
@@ -107,23 +107,27 @@ Totals: single camera polished (0–3) ≈ 12–23 sessions ≈ 30–100 M token
 - [x] Check that Blender's extension installer installs only the listed wheels (2026-11-03): a zip install into a
       throwaway user folder gives only `mediapipe` and `cv2`; MediaPipe's declared dependencies are not pulled in.
       `Tools/build_extension.py` repeats this check and runs all tests on the installed copy at every build.
-- [ ] Re-verify the repacked mediapipe wheel (both patches; the tool is written in Phase 1) on every MediaPipe
-      update; reconsider building libmediapipe from source instead.
+- [x] Unchanged wheels (2026-11-04, after the 0.2.0 refusal): the repack tool is gone; `Tools/bundled_wheels.py`
+      pins every wheel to PyPI's SHA-256. On a MediaPipe update: download, compare with PyPI, update the list.
 - [x] Windows build: `Tools/build_extension.py` → `dist/freeclipmocap-<version>.zip` (2026-11-03; 0.2.0 since Compare
       View and the calibration core). Linux/macOS later
-      (other wheels; MediaPipe's telemetry patch must be redone for each platform's library).
+      (other wheels).
 - [x] Licence notices (2026-11-04): `THIRD_PARTY_NOTICES.md`, `LICENSES/Apache-2.0.txt` and
-      `LICENSES/GPL-3.0-or-later.txt` (a copy of the repo's `LICENSE`) in the extension; the repacked mediapipe wheel
-      carries `dist-info/licenses/MODIFICATIONS` (Apache-2.0 §4(b)). The four models are Apache-2.0 per their model
+      `LICENSES/GPL-3.0-or-later.txt` (a copy of the repo's `LICENSE`) in the extension. The four models are Apache-2.0 per their model
       cards. The build checks all of these.
 - [ ] Open licence question before submitting: OpenCV's wheel statically links Intel IPP ICV under the Intel
       Simplified Software License (GPL compatibility not settled).
 - [x] Repository public at https://github.com/rnsfh/FreeClipMoCap, linked as `website` in the manifest (2026-11-04).
-- [ ] Store page: icon, featured image, screenshots (the user, later), description (stating the MediaPipe change).
+- [ ] Store page: icon, featured image, screenshots (the user, later), description (stating MediaPipe's usage reports to Google).
 - [x] Submitted 0.2.0 to extensions.blender.org for approval (2026-11-04; the user's decision: submit despite the
       open IPP question; multi-camera ships unlabelled; the offline test from PRIVACY.md is skipped for this release).
-- [ ] Approval: answer the moderators' questions (likely: Intel IPP in OpenCV; fallback is an OpenCV build without
-      IPP).
+- [x] 0.2.0 declined (2026-11-04): "We cannot host modified version of something like MediaPipe … Custom MediaPipe
+      implementation disqualifies this extension." The IPP question was not raised.
+- [x] 0.2.1 (2026-11-04, the user chose to ship MediaPipe unchanged): MediaPipe 1.2.2 as on PyPI, matplotlib and its
+      dependencies bundled, `network` permission declared. Zip 147 MB; 163 tests pass on the installed copy.
+- [ ] Resubmit 0.2.1 (the user), with the store description stating the usage reports.
+- [ ] Approval: answer the moderators' questions (possibly Intel IPP in OpenCV, FreeType/Qhull in matplotlib, or
+      Capture ignoring Allow Online Access).
 
 ## Phase 4: multi-camera
 

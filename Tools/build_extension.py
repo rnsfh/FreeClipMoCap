@@ -9,7 +9,7 @@ import zipfile
 from pathlib import Path
 
 from prepare_extension_files import MODEL_FILE_NAMES
-from repack_mediapipe_wheel import PatchError, verify_wheel
+from bundled_wheels import INSTALLED_PACKAGES, WheelError, verify_unchanged_wheel
 
 _REPOSITORY_FOLDER = Path(__file__).resolve().parent.parent
 _EXTENSION_FOLDER = _REPOSITORY_FOLDER / "src" / "freeclipmocap"
@@ -19,7 +19,6 @@ _DEFAULT_BLENDER = Path("C:/Program Files/Blender Foundation/Blender 5.2/blender
 _UPLOAD_LIMIT_MEGABYTES = 200.0
 _BUILT_IN_PRESETS = ("presets/bone_maps/Mixamo.json", "presets/bone_maps/Rigify.json")
 _LICENCE_FILES = ("THIRD_PARTY_NOTICES.md", "LICENSES/Apache-2.0.txt", "LICENSES/GPL-3.0-or-later.txt")
-_EXPECTED_PACKAGES = {"mediapipe", "cv2"}
 
 
 class BuildError(Exception):
@@ -76,12 +75,10 @@ def check_zip(zip_path: Path) -> None:
     extension_licence = (_EXTENSION_FOLDER / "LICENSES" / "GPL-3.0-or-later.txt").read_text(encoding="utf-8")
     if repository_licence != extension_licence:
         raise BuildError("LICENSES/GPL-3.0-or-later.txt differs from the repository's LICENSE.")
-    mediapipe_wheels = [wheel for wheel in manifest["wheels"] if Path(wheel).name.startswith("mediapipe-")]
-    if len(mediapipe_wheels) != 1:
-        raise BuildError(f"Expected one mediapipe wheel in the manifest, found {len(mediapipe_wheels)}.")
     try:
-        verify_wheel(_EXTENSION_FOLDER / mediapipe_wheels[0])
-    except PatchError as error:
+        for wheel in manifest["wheels"]:
+            verify_unchanged_wheel(_EXTENSION_FOLDER / wheel)
+    except WheelError as error:
         raise BuildError(str(error)) from error
     compiled = sorted(name for name in names if "__pycache__" in name or name.endswith(".pyc"))
     if compiled:
@@ -107,10 +104,10 @@ def test_installed_zip(blender: Path, zip_path: Path) -> None:
         site_packages = next(extensions_folder.glob(".local/lib/python*/site-packages"), None)
         if site_packages is None:
             raise BuildError("The wheels were not installed.")
-        packages = {path.name for path in site_packages.iterdir() if not path.name.endswith(".dist-info") and path.name != "__pycache__"}
+        packages = {path.name for path in site_packages.iterdir() if not path.name.endswith((".dist-info", ".data")) and path.name != "__pycache__"}
         print(f"Installed: into a throwaway Blender user folder; wheel packages: {', '.join(sorted(packages))}")
-        if packages != _EXPECTED_PACKAGES:
-            raise BuildError(f"Expected only {', '.join(sorted(_EXPECTED_PACKAGES))} from the wheels, found {', '.join(sorted(packages))}.")
+        if packages != INSTALLED_PACKAGES:
+            raise BuildError(f"Expected only {', '.join(sorted(INSTALLED_PACKAGES))} from the wheels, found {', '.join(sorted(packages))}.")
         output = run_blender(blender, ["-b", "--factory-startup", "--python-exit-code", "1", "--python", str(_TEST_RUNNER)], environment)
         summary = [line for line in output.splitlines() if line.startswith(("Ran ", "OK", "FAILED"))]
         print(f"Tested:    the installed copy: {' '.join(summary)}")

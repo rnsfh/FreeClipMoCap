@@ -14,7 +14,7 @@ Tests import the extension as `bl_ext.user_default.freeclipmocap...`, the name B
 
 | Test | Checks |
 |---|---|
-| `test_development_install.py` | Extension enables; panel registered; mediapipe and cv2 load from the extension's wheels; telemetry endpoint blocked; vision loads without matplotlib; models bundled |
+| `test_development_install.py` | Extension enables; panel registered; mediapipe and cv2 load from the extension's wheels; vision loads, with matplotlib from the extension's wheels; models bundled |
 | `capture/test_landmark_cache.py` | Cache path and naming; save/load keeps every value (NaN too); loaded arrays read-only; reuse only while video and settings match; other format versions refused |
 | `rig/test_bone_guess.py` | Guess on Mixamo (with, without and with another namespace), Unreal-style and metarig-style names; tips, `headfront` and tails stay unmapped; preset first, names fill the rest |
 | `rig/test_bone_map_preset.py` | Preset save/load; a broken preset is reported while others still load; unsafe names refused; namespace-free matching only when unique; merging never reuses a bone |

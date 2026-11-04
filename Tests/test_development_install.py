@@ -6,8 +6,6 @@ from pathlib import Path
 import bpy
 
 _MODULE_NAME = "bl_ext.user_default.freeclipmocap"
-_BLOCKED_ENDPOINT = b"https://127.0.0.1:1/blocked0000"
-_TELEMETRY_ENDPOINT = b"https://play.googleapis.com/log"
 _MODEL_FILE_NAMES = (
     "pose_landmarker_lite.task",
     "pose_landmarker_full.task",
@@ -35,16 +33,10 @@ class DevelopmentInstallTests(unittest.TestCase):
         cv2 = importlib.import_module("cv2")
         self.assertIn(".local", Path(cv2.__file__).parts)
 
-    def test_telemetry_endpoint_is_blocked(self) -> None:
-        mediapipe = importlib.import_module("mediapipe")
-        library = (Path(mediapipe.__file__).parent / "tasks" / "c" / "libmediapipe.dll").read_bytes()
-        self.assertEqual(library.count(_TELEMETRY_ENDPOINT), 0)
-        self.assertEqual(library.count(_BLOCKED_ENDPOINT), 1)
-
-    def test_vision_loads_without_matplotlib(self) -> None:
+    def test_vision_loads_with_matplotlib_from_extension_wheels(self) -> None:
         vision = importlib.import_module("mediapipe.tasks.python.vision")
         self.assertTrue(hasattr(vision, "PoseLandmarker"))
-        self.assertNotIn("matplotlib", sys.modules)
+        self.assertIn(".local", Path(sys.modules["matplotlib"].__file__).parts)
 
     def test_models_are_bundled(self) -> None:
         extension = sys.modules[_MODULE_NAME]

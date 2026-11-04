@@ -5,11 +5,11 @@
 | Decision | Choice |
 |---|---|
 | Approach | Own tool, not a paid or cloud service |
-| Pose model | MediaPipe, **latest version** (1.2.0 at the time) |
+| Pose model | MediaPipe, **latest version** (1.2.0 at the time; 1.2.2 since 2026-11-04) |
 | Where it runs | Inside Blender, as a Blender extension |
 | Language (2026-11-03) | **All Python** (numpy for the math), so the extension is only Python + bundled wheels as extensions.blender.org expects. Replaces the first plan (thin Python add-on + C# core run as a subprocess, 2026-11-02). The build tools are Python too (2026-11-03) |
 | Cameras | Single camera first; multi-camera later if it goes well |
-| Privacy | Fully local, no third parties (see [PRIVACY.md](PRIVACY.md)) |
+| Privacy | Fully local, no third parties (see [PRIVACY.md](PRIVACY.md)), except MediaPipe's usage reports to Google (accepted 2026-11-04) |
 | Distribution | extensions.blender.org, installed from inside Blender in one step (2026-11-03) |
 | Name (2026-11-03) | **FreeClipMocap**. The first name, BlendMotion, was taken. Checked free 2026-11-03: no extension on extensions.blender.org, no GitHub repo, no web hits. Close to the existing FreeMoCap project (noted to the user). The repo folder is `FreeClipMoCap` (renamed from `BlendMotion` by the user, 2026-11-03); the product keeps the spelling FreeClipMocap (the user) |
 | Licence (2026-11-03) | **GPL-3.0-or-later** for the whole project (required for add-ons on extensions.blender.org) |
@@ -21,9 +21,10 @@
 | Landmark cache | One cache per video + model + capture settings (named with a short settings hash), in a FreeClipMocap folder next to the video; identical settings reuse it |
 | Landmark cache format (2026-11-03) | **Binary**; the exact layout is proposed before Phase 1 code. (Bone rotations no longer need a file: the solver runs in the same Python as the keyframing.) |
 | FBX export over an existing file | Blender's normal file dialog: red name, the user confirms the overwrite |
-| MediaPipe telemetry | Keep 1.2.0 and patch the endpoint in `libmediapipe.dll` (first with `PatchMediaPipeTelemetry.cs`, now inside the Python wheel repack tool); building from source is revisited in Phase 3 |
-| Bundled wheels | Only `mediapipe` and `opencv-contrib-python`. Dropped: sounddevice, cffi, pycparser, absl-py, flatbuffers, and matplotlib with its 9 dependencies. certifi and numpy come from Blender |
-| matplotlib (2026-11-03) | Not bundled. The bundled mediapipe wheel gets a second patch: `drawing_utils.py` imports matplotlib inside `plot_landmarks` instead of at the top. (The earlier `sys.modules` stand-in broke the add-on guideline "Bundle Modules".) |
+| MediaPipe telemetry (2026-11-04) | **Accepted** (the user): the mediapipe wheel is bundled exactly as on PyPI, so its native library sends Google usage reports. extensions.blender.org declined 0.2.0 for carrying a modified MediaPipe ("We cannot host modified version of something like MediaPipe"). From 2026-11-02 to 11-04 the endpoint in `libmediapipe.dll` was patched; a build from source would count as modified too. Self-hosting the patched build (own extension repository) was offered and not chosen |
+| Online Access (2026-11-04) | The manifest declares the `network` permission ("MediaPipe sends usage reports to Google while tracking"). Capture runs even with Blender's Allow Online Access off (the user, aware a moderator may object to that) |
+| Bundled wheels (2026-11-04) | mediapipe, opencv-contrib-python, and matplotlib with contourpy, cycler, fonttools, kiwisolver, pillow, pyparsing, python-dateutil and tzdata, all unchanged from PyPI. Dropped: sounddevice, cffi, pycparser, absl-py, flatbuffers (never loaded on our path). certifi, numpy and packaging come from Blender |
+| matplotlib (2026-11-04) | **Bundled** (the user): `mediapipe.tasks.python.vision` imports it and the wheel may not be changed. Replaces the lazy-import patch in `drawing_utils.py` (2026-11-03) |
 | Offline test | The user disconnects the internet and runs `Scratch/Phase0/scripts/offline_test.ps1` alone (not firewall rules). Passed 2026-11-02 |
 | Video decoding (2026-11-03) | OpenCV for capture; Blender's movie clip only for showing the video in the Compare view |
 | Target rigs (2026-11-03) | Versatile, best user experience: auto-guess the bone map from names and hierarchy → editable map in the panel → save/load maps as presets; built-in presets for Mixamo (Phase 1), Rigify, Auto-Rig Pro, … (Phase 2) |
@@ -101,11 +102,11 @@
 | Constants (2026-11-03) | `freeclipmocap/constants/`, one module per topic, `UPPER_SNAKE_CASE`; a value used only inside one module is a `_LEADING_UNDERSCORE` constant at its top |
 | Type hints (2026-11-03) | On every parameter, return value and field; checked by Pylance in basic mode. bpy objects typed loosely (no official stubs) |
 | Tests (2026-11-03) | `unittest` (built in), run with Blender's `python.exe` or headless `blender.exe` for bpy parts; `Tests/` mirrors the package layout |
-| Build tools (2026-11-03) | Python, run with Blender's `python.exe`. The telemetry patch is ported from `PatchMediaPipeTelemetry.cs` into the wheel repack tool and the C# file retired, so building needs no .NET |
-| Patched mediapipe wheel (2026-11-03) | Keeps PyPI's name and version (`mediapipe-1.2.0-py3-none-win_amd64.whl`); only the two patched files and their `RECORD` hashes change. The build tool refuses an unpatched DLL |
-| Licence notices (2026-11-04) | `THIRD_PARTY_NOTICES.md` + `LICENSES/Apache-2.0.txt` (canonical text from apache.org) + `LICENSES/GPL-3.0-or-later.txt` (a copy of the repo's `LICENSE`, the build checks they match) in `src/freeclipmocap/`, so they ship in the zip; the repack tool also adds `licenses/MODIFICATIONS` to the mediapipe wheel's dist-info, listed in `RECORD`, so the notice travels with the changed files (the user). The wheel keeps PyPI's name and version. `build_extension.py` refuses a zip without these |
+| Build tools (2026-11-03) | Python, run with Blender's `python.exe`, so building needs no .NET |
+| Unchanged wheels (2026-11-04) | Every bundled wheel is byte-identical to PyPI: `Tools/bundled_wheels.py` lists each file's SHA-256 (compared with PyPI's JSON API when added), and the prepare tool and the build refuse any other file. Replaces the patched mediapipe wheel and its repack tool (2026-11-03) |
+| Licence notices (2026-11-04) | `THIRD_PARTY_NOTICES.md` + `LICENSES/Apache-2.0.txt` (canonical text from apache.org) + `LICENSES/GPL-3.0-or-later.txt` (a copy of the repo's `LICENSE`, the build checks they match) in `src/freeclipmocap/`, so they ship in the zip (the user). `build_extension.py` refuses a zip without these. (The `MODIFICATIONS` notice inside the mediapipe wheel went with the patches, 2026-11-04) |
 | Model licences (checked 2026-11-04) | Apache-2.0, as stated in the model cards: BlazePose GHUM 3D (pose lite/full/heavy) and Hand Tracking (Lite/Full) Oct 2021. The `.task` files carry no licence metadata themselves |
-| Development install (2026-11-03) | A directory junction from Blender's user extensions folder to `src/freeclipmocap/`, made once by a script; the build tool puts the patched wheels and the models into `src/freeclipmocap/wheels/` and `models/` (generated) |
+| Development install (2026-11-03) | A directory junction from Blender's user extensions folder to `src/freeclipmocap/`, made once by a script; the prepare tool puts the wheels and the models into `src/freeclipmocap/wheels/` and `models/` (generated) |
 
 ## Open questions
 
@@ -123,7 +124,8 @@ Ask the user before settling any of these.
   guidelines neither allowed nor forbade it ("self-contained", "should not have functionality which is extended
   by external software").
 - Native AOT prerequisites (Visual Studio C++ workload) → no longer needed (all Python).
-- Video decoding → OpenCV. Dependencies → mediapipe + opencv only, matplotlib via lazy import patch.
+- Video decoding → OpenCV. Dependencies → mediapipe + opencv + matplotlib and its dependencies, all unchanged
+  (2026-11-04; before that mediapipe + opencv only, with a lazy-import patch).
 - Pose model variant → heavy default. Target rigs → auto-guess + editable map + presets. Export → FBX and BVH.
 - Name → FreeClipMocap. Other candidates checked free on 2026-11-03: Clip2Rig, Mimicrig, Posewright.
 - Source layout, bpy-free solver, `.npz` cache, data classes, factories, constants, type hints, tests, build

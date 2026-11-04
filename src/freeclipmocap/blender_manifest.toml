@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "freeclipmocap"
-version = "0.2.0"
+version = "0.2.1"
 name = "FreeClipMocap"
 tagline = "Markerless motion capture from video onto any humanoid rig"
 maintainer = "Chevchellioos"
@@ -19,9 +19,19 @@ copyright = ["2026 rnsfh"]
 platforms = ["windows-x64"]
 
 wheels = [
-  "./wheels/mediapipe-1.2.0-py3-none-win_amd64.whl",
+  "./wheels/mediapipe-1.2.2-py3-none-win_amd64.whl",
   "./wheels/opencv_contrib_python-5.0.0.93-cp37-abi3-win_amd64.whl",
+  "./wheels/matplotlib-3.11.2-cp313-cp313-win_amd64.whl",
+  "./wheels/contourpy-1.4.0-cp313-cp313-win_amd64.whl",
+  "./wheels/cycler-0.12.1-py3-none-any.whl",
+  "./wheels/fonttools-4.68.0-cp313-cp313-win_amd64.whl",
+  "./wheels/kiwisolver-1.5.1-cp313-cp313-win_amd64.whl",
+  "./wheels/pillow-13.0.0-cp313-cp313-win_amd64.whl",
+  "./wheels/pyparsing-3.3.3-py3-none-any.whl",
+  "./wheels/python_dateutil-4.0.0-py3-none-any.whl",
+  "./wheels/tzdata-2026.6-py2.py3-none-any.whl",
 ]
 
 [permissions]
+network = "MediaPipe sends usage reports to Google while tracking"
 files = "Read videos and write landmark caches next to them"

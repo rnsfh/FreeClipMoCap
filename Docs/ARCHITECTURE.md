@@ -66,8 +66,9 @@ modification time all match; otherwise captured again (the file is overwritten).
 - Left and right are the **actor's** sides, as in MediaPipe's pose landmarks. Hands are matched to the pose wrists
   (shortest total distance in pixels), not by MediaPipe's handedness label, which assumes a mirrored selfie image.
   Hands are kept only in frames where the body was found.
-- The bundled mediapipe wheel carries two patches: the telemetry endpoint in `libmediapipe.dll`, and
-  `drawing_utils.py` importing matplotlib only inside `plot_landmarks` (so matplotlib is not needed).
+- Every bundled wheel is exactly as published on PyPI (`Tools/bundled_wheels.py` pins their SHA-256). MediaPipe's
+  native library sends Google usage reports while a tracker runs (PRIVACY.md); importing its vision tasks loads
+  matplotlib, which is bundled for that reason.
 
 ### Solver (numpy, no `bpy`)
 

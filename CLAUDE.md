@@ -12,8 +12,10 @@ open.
    covered below need no question. When a script overwrites something the user may think of as hand-made, say so
    up front.
 2. **No third parties.** Video, landmarks, animations and any user data never leave the machine. No cloud APIs,
-   no telemetry, no runtime downloads. One-time downloads of packages and models at build time are allowed, each
-   URL named to the user first. See `Docs/PRIVACY.md`.
+   no telemetry of our own, no runtime downloads. One-time downloads of packages and models at build time are
+   allowed, each URL named to the user first. **One accepted exception** (the user, 2026-11-04): MediaPipe is
+   bundled unchanged, so its native library sends Google usage reports (extensions.blender.org declined a patched
+   MediaPipe). See `Docs/PRIVACY.md`.
 3. **All Python** (the user's decision, 2026-11-03), so the extension is Python + bundled wheels as
    extensions.blender.org expects. No bundled programs. The build tools in `Tools/` are Python too (2026-11-03), so no C# is
    in use; the C# guidelines below apply if C# comes back.
