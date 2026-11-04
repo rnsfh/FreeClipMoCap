@@ -15,7 +15,7 @@
 | Licence (2026-11-03) | **GPL-3.0-or-later** for the whole project (required for add-ons on extensions.blender.org) |
 | Start | Workspace and docs only; implementation (Phase 0) later |
 | Wheel downloads (Phase 0) | With Blender's own `python.exe`, not the standalone Python 3.15 |
-| Scratch work | `Scratch/` in the repo (wheels, models, experiments) |
+| Scratch work | `Scratch/` in the repo (wheels, models, experiments), git-ignored. Emptied 2026-11-04 before the first push (the user): the Phase 0 experiments, source wheels and models, test rigs and dev profile were deleted; the prepared wheels and models stay in `src/freeclipmocap/wheels/` and `models/` |
 | Pose model variant | **Heavy** by default; lite and full offered as a fast preview (decided after the first real clip) |
 | Re-solving | Every Solve makes a new Action (take): `Name`, `Name.001`, …, each with a fake user so Blender's cleanup on save keeps it; the newest is assigned to the armature |
 | Landmark cache | One cache per video + model + capture settings (named with a short settings hash), in a FreeClipMocap folder next to the video; identical settings reuse it |
