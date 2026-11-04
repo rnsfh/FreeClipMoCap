@@ -41,7 +41,7 @@ class SolveError(Exception):
 class SolveSettings:
     smoothing: float
     root_motion: bool = False
-    level_by_torso: bool = True
+    level_by_body: bool = True
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -205,14 +205,16 @@ def solve(cache: LandmarkCache, rig: RigRest, bone_map: BoneMap, table: Tracking
         smoothed = one_euro_filter.smooth(filled, timestamps_seconds, settings.smoothing)
         point_sets[point_set] = smoothed @ to_armature.T
 
-    torso_up = _Solver(rig, bone_map, point_sets, axes).actor_vector(table.chest_direction)
+    unleveled = _Solver(rig, bone_map, point_sets, axes)
+    torso_up = unleveled.actor_vector(table.chest_direction)
     if torso_up is None:
         raise SolveError("The hips and shoulders were never clearly visible, so the body cannot be solved.")
     camera_tilt_degrees = 0.0
-    if settings.level_by_torso:
-        median_torso_up = rotations.normalized(np.median(rotations.normalized(torso_up), axis=0))
-        leveling = rotations.rotation_between(median_torso_up, axes[RigAxis.UP])
-        camera_tilt_degrees = float(np.degrees(np.arccos(np.clip(np.dot(median_torso_up, axes[RigAxis.UP]), -1.0, 1.0))))
+    if settings.level_by_body:
+        body_up = unleveled.actor_vector(table.body_up)
+        median_body_up = rotations.normalized(np.median(rotations.normalized(torso_up if body_up is None else body_up), axis=0))
+        leveling = rotations.rotation_between(median_body_up, axes[RigAxis.UP])
+        camera_tilt_degrees = float(np.degrees(np.arccos(np.clip(np.dot(median_body_up, axes[RigAxis.UP]), -1.0, 1.0))))
         point_sets = {point_set: positions @ leveling.T for point_set, positions in point_sets.items()}
 
     solver = _Solver(rig, bone_map, point_sets, axes)

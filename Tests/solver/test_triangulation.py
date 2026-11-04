@@ -109,7 +109,7 @@ class TriangulationTests(unittest.TestCase):
 
     def test_the_solver_keeps_the_triangulated_knees(self) -> None:
         rig, bone_map = make_rig()
-        take = solve(self.cache, rig, bone_map, MEDIAPIPE_TABLE, SolveSettings(smoothing=0.5, level_by_torso=False))
+        take = solve(self.cache, rig, bone_map, MEDIAPIPE_TABLE, SolveSettings(smoothing=0.5, level_by_body=False))
         self.assertEqual(take.camera_tilt_degrees, 0.0)
         points = self.cache.pose.world_landmarks.astype(np.float64)
         for side in ("Left", "Right"):

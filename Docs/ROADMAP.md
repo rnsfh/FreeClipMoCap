@@ -85,7 +85,8 @@ Totals: single camera polished (0–3) ≈ 12–23 sessions ≈ 30–100 M token
       finger bends clamped by joint limits (2026-11-03).
 - [ ] ~~Ground plane from the feet instead of leveling by the torso~~ moved to Phase 4 (the user, 2026-11-03): on the
       user's clip a floor fitted through planted heels and toes disagreed with the torso by 21° (single-camera foot
-      depth is too rough). Torso leveling stays; an actor leaning the whole clip is still straightened.
+      depth is too rough). Torso leveling stays; an actor leaning the whole clip is still straightened. (Replaced
+      2026-11-04 by leveling along the whole body, the user's choice.)
 - [x] Bone-map presets: built-in Rigify on its FK controls, with Solve switching the rig to FK and the writer
       correcting for the rig's constraints (2026-11-03). Auto-Rig Pro, Unreal mannequin, VRoid/VRM: not chosen for now.
 - [x] Key reduction keeps planted feet within ~5 mm (tighter tolerance for hips and legs, 2026-11-03).
@@ -130,6 +131,7 @@ Totals: single camera polished (0–3) ≈ 12–23 sessions ≈ 30–100 M token
       MediaPipe's visibility; left/right swaps undone; hands triangulated or from one camera. On the user's take the
       solved body stands 2.8° from vertical (one camera: 10.3°), knees 9° / 6° (one camera: 36° / 33°).
 - [x] UI for several videos: Capture captures every camera; Solve's All Cameras checkbox (2026-11-04).
-- [ ] Single-camera depth repair: keep each joint on its 2D point and place it in depth with the lens and bone
-      lengths, only toward/away from MediaPipe (the user, 2026-11-04: after the multi-camera solve).
+- [x] Single-camera depth repair, legs only (2026-11-04): each leg joint on its 2D point, placed in depth by the
+      lens and bone lengths, only toward/away from MediaPipe; one-camera leveling by the whole body. Phone take:
+      whole body 4.6° from vertical (was 10.3°), knees 8° / 9° (was 36° / 33°).
 - [ ] Floor from the triangulated feet when no floor shot was found (from the board: done with calibration).

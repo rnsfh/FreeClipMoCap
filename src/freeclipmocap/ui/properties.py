@@ -304,7 +304,8 @@ class FreeClipMocapProperties(bpy.types.PropertyGroup, CalibrationLensSettings):
     )
     compare_lens_millimetres: bpy.props.FloatProperty(
         name="Lens",
-        description="Focal length of the camera that filmed the video, 35 mm equivalent; 26 mm is a phone's main camera",
+        description="Focal length of the camera that filmed the video, 35 mm equivalent; 26 mm is a phone's main camera. "
+        "Used by Compare View, and by Solve from one camera to straighten the legs by the video",
         min=8.0,
         max=600.0,
         default=26.0,

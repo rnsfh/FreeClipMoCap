@@ -39,6 +39,7 @@ _EYE_CENTER = _pose(pose_landmarks.LEFT_EYE, pose_landmarks.RIGHT_EYE)
 _RIG_HIP_CENTER = _rig(Role.LEFT_UP_LEG, Role.RIGHT_UP_LEG)
 _RIG_SHOULDER_CENTER = _rig(Role.LEFT_ARM, Role.RIGHT_ARM)
 _TORSO_UP = Direction(_HIP_CENTER, _SHOULDER_CENTER, _RIG_HIP_CENTER, _RIG_SHOULDER_CENTER)
+_BODY_UP = Direction(_pose(pose_landmarks.LEFT_ANKLE, pose_landmarks.RIGHT_ANKLE), _SHOULDER_CENTER)
 
 
 def _side_rules(side: str) -> tuple[RoleRule, ...]:
@@ -155,6 +156,7 @@ MEDIAPIPE_TABLE = TrackingTable(
         ),
     ),
     chest_direction=_TORSO_UP,
+    body_up=_BODY_UP,
     chest_twist=Direction(
         _pose(pose_landmarks.LEFT_SHOULDER),
         _pose(pose_landmarks.RIGHT_SHOULDER),

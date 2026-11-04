@@ -68,7 +68,7 @@ One person, whole body in the picture, camera on a tripod. [Docs/FILMING.md](Doc
 | | Smoothing | How strongly jitter is smoothed; fast moves stay sharp at any setting |
 | | Root Motion | Off (default): in place, the body still moves up and down and sways. On: the body travels as in the video |
 | | Fewer Keys / Tolerance | Keeps only the keys needed to stay within the tolerance (2° by default), so the take is easy to edit. Hips and legs are kept tighter so planted feet do not slide |
-| | Compare View / Lens | Fits a camera (`FreeClipMocap Camera`, updated on every press) to the video and shows the take through it, video behind the rig. Sets the render size to the video's. Lens: the filming camera's focal length, 35 mm equivalent |
+| | Compare View / Lens | Fits a camera (`FreeClipMocap Camera`, updated on every press) to the video and shows the take through it, video behind the rig. Sets the render size to the video's. Lens: the filming camera's focal length, 35 mm equivalent; Solve from one camera uses it too, to straighten the legs |
 | IK/FK | Add IK Controls | A target (foot/hand) and a pole (knee/elbow) empty per limb, following the take, in the collection `<armature> IK Controls` |
 | | Left Leg … Right Arm | Per limb: 0 = FK (the solved keys), 1 = IK (reaches for its target). Keyable |
 | | Match IK to FK | Keys the targets to follow the FK keys again (replaces your target moves) |
@@ -83,6 +83,8 @@ One person, whole body in the picture, camera on a tripod. [Docs/FILMING.md](Doc
   in impossible ways.
 - **Clean-up:** jitter is smoothed, single frames where the tracker mixed up left and right are skipped, a tilted
   camera is levelled, and body parts that are rarely visible are left unanimated (Solve tells you which).
+- **Legs from the video** (one camera): the tracker's 3D often bends straight legs toward or away from the lens;
+  Solve puts each leg joint back where the video shows it, using the **Lens** setting (Compare View's).
 - **Rigify:** arms and legs are switched to FK and neck/head follow turned off (Solve lists each change); the keys
   go on the FK controls you animate with.
 

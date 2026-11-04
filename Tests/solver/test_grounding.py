@@ -73,7 +73,7 @@ class GroundingTests(unittest.TestCase):
             frame, drop = self.crouched(float(degrees))
             frames.append(frame)
         frames += [frames[-1]] * 10
-        take = solve(make_cache(frames), self.rig, self.bone_map, MEDIAPIPE_TABLE, _NO_SMOOTHING)
+        take = solve(make_cache(frames), self.rig, self.bone_map, MEDIAPIPE_TABLE, SolveSettings(smoothing=0.0, level_by_body=False))
         self.assertGreater(drop, 0.1)
         self.assertAlmostEqual(float(hips_translation(self.rig, take)[-1, 2]), -drop, delta=0.01)
         heads = solved_joint_positions(self.rig, take)

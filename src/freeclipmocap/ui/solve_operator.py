@@ -6,8 +6,10 @@ from ..animation.action_writer import write_take
 from ..animation.frame_rates import nearest_standard_frame_rate
 from ..animation.ik_controls import has_ik_controls, key_ik_targets_from_fk, muted_ik_controls
 from ..capture.landmark_cache import CacheFormatError, LandmarkCache, find_current_cache
+from ..constants.camera_lens import FULL_FRAME_WIDTH_MILLIMETRES
 from ..rig.armature_bone_map import apply_rig_settings, read_bone_map
 from ..rig.armature_rest import rig_rest_from_armature
+from ..solver.leg_depth import with_legs_from_the_video
 from ..solver.mediapipe_table import MEDIAPIPE_TABLE
 from ..solver.pose_solver import SolveError, SolveSettings, solve
 from ..solver.triangulation import TriangulationError, TriangulationReport, triangulated_cache
@@ -98,6 +100,10 @@ class SolveOperator(bpy.types.Operator):
                     return {"CANCELLED"}
                 cache, report = triangulated_cache(caches, setup.cameras, take_start_delays_seconds(properties))
                 camera_note = describe_triangulation(report, len(caches))
+            else:
+                larger_side = max(cache.video.width, cache.video.height)
+                focal_length_pixels = properties.compare_lens_millimetres * larger_side / FULL_FRAME_WIDTH_MILLIMETRES
+                cache = with_legs_from_the_video(cache, focal_length_pixels)
             first_frame = properties.video_start_frame
             last_frame = properties.video_end_frame or cache.frame_count
             if last_frame > cache.frame_count:
@@ -112,7 +118,7 @@ class SolveOperator(bpy.types.Operator):
                 read_bone_map(armature_object),
                 MEDIAPIPE_TABLE,
                 SolveSettings(
-                    smoothing=properties.smoothing, root_motion=properties.root_motion, level_by_torso=len(caches) == 1
+                    smoothing=properties.smoothing, root_motion=properties.root_motion, level_by_body=len(caches) == 1
                 ),
             )
         except (CacheFormatError, SolveError, CalibrationRequestError, TriangulationError) as error:

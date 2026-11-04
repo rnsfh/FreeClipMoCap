@@ -84,6 +84,7 @@ class TrackingTable:
     hips_rule: RoleRule
     chest_direction: Direction
     chest_twist: Direction
+    body_up: Direction
     spine_roles: tuple[Role, ...]
     role_rules: tuple[RoleRule, ...]
     hand_rules: tuple[HandRule, ...]

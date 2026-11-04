@@ -78,6 +78,16 @@ holds.
 
 Steps of a Solve (`solver/pose_solver.py`, built 2026-11-03):
 
+0. **Legs from the video** (one camera only, `solver/leg_depth.py`, 2026-11-04; Solve does it before the solver).
+   MediaPipe's one-camera 3D folds straight legs toward or away from the lens. Per frame, MediaPipe's hip-centred
+   skeleton is placed in front of the lens (the shift that best puts its points on their camera rays, linear least
+   squares; focal length from the panel's Lens). Each leg bone's length is the 75th percentile over the clip of its
+   length laid in that depth plane (a bone never looks longer than it is). Then the hips, knees, ankles, heels and
+   toes are rebuilt from the hips' centre outward, each on its camera ray at its bone's length from its parent: of
+   the two places where the ray meets that sphere, the one nearer MediaPipe's guess (a ray that misses: the bone
+   points at its nearest point). Torso, arms and head keep MediaPipe's 3D (repairing them made them worse). On the
+   user's phone take, against the two-camera triangulation: shins within 2-5° (MediaPipe 23-25°), thighs 4-5°,
+   feet 5° (MediaPipe up to 37°).
 1. **Clean the points.** Body points with visibility < 0.5 count as missing in that frame; a point visible in under
    25% of the clip is not used at all (its bones are not animated, and the Solve message says so). Frames whose hip
    or shoulder line turns > 100° against the surrounding ±7 frames are tracker left/right mix-ups and are skipped
@@ -87,8 +97,11 @@ Steps of a Solve (`solver/pose_solver.py`, built 2026-11-03):
 3. **Into the rig's space.** MediaPipe's axes (x = image right, y = down, z = away from the camera) are mapped onto
    the rig's own right/up/back axes, found from its legs and head, so any rig orientation works. The actor faces the
    camera = the rig faces its front.
-4. **Level the camera.** The median torso direction over the clip is turned to straight up (a phone pointing down
-   at the actor makes the body lean in camera space); the angle is reported.
+4. **Level the camera.** The median direction from the ankles to the shoulders over the clip is turned to straight
+   up (a phone pointing down at the actor makes the body lean in camera space); the angle is reported. The whole
+   body, not the torso (2026-11-04): a real bend at the hips stays in the torso instead of slanting the legs. A clip
+   crouched or lying most of the time is levelled by that pose. Without visible ankles, the torso. Off with several
+   cameras (`SolveSettings.level_by_body`), whose floor is level already.
 5. **Solve each mapped bone, parents first**, against the rig's rest pose: *swing* (turn the bone onto the measured
    direction, keeping the twist it inherits), *frame* (direction + a second line fixes the twist: hips by the hip
    line, hands by index→pinky knuckles, head by ear→eye with a 10° anatomical offset and the ear line), or
@@ -226,7 +239,7 @@ Built so far (2026-11-03):
 
 - **Capture** (`ui/capture_operators.py`): every camera's video in turn, one cache per video (a camera already captured with the same settings is skipped).
 - **Triangulation** (`solver/triangulation.py`, numpy, 2026-11-04): camera 1's frames are the time base; each camera's 2D points are read at the same moment (Sync offset plus the calibration's picture delay, interpolated between its frames, NaN across dropped frames), lens distortion undone (the inverse of OpenCV's model, by iteration), left/right swaps of each further camera against camera 1 undone per frame (the labelling whose triangulation fits better by half), then linear triangulation of every point; points a camera sees more than 3% of its picture height away (or behind it) are dropped. MediaPipe's visibility is not used: the cameras' agreement decides. Hands are triangulated relative to the wrist; where only one camera has a hand, its MediaPipe hand (camera axes) is turned into the world. The result is a `LandmarkCache` in a level camera-1 frame (MediaPipe's axes: x right, y down, z away), with camera 1's pictures for the foot contacts, and a `TriangulationReport` (body share, median disagreement in px, swapped frames, hand sources).
-- **Solve** with All Cameras (on by default when there are several videos): every camera's cache and a calibration matching the current videos, Sync and lenses are needed, else Solve says which; the solver runs as for one camera with torso leveling off (`SolveSettings.level_by_torso`).
+- **Solve** with All Cameras (on by default when there are several videos): every camera's cache and a calibration matching the current videos, Sync and lenses are needed, else Solve says which; the solver runs as for one camera with leveling off (`SolveSettings.level_by_body`) and without the leg repair.
 
 Still to build: the floor from the triangulated feet when no floor shot was found (the body method already finds it).
 
