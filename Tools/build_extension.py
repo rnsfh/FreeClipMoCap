@@ -9,6 +9,7 @@ import zipfile
 from pathlib import Path
 
 from prepare_extension_files import MODEL_FILE_NAMES
+from repack_mediapipe_wheel import PatchError, verify_wheel
 
 _REPOSITORY_FOLDER = Path(__file__).resolve().parent.parent
 _EXTENSION_FOLDER = _REPOSITORY_FOLDER / "src" / "freeclipmocap"
@@ -17,6 +18,7 @@ _TEST_RUNNER = _REPOSITORY_FOLDER / "Tests" / "run_in_blender.py"
 _DEFAULT_BLENDER = Path("C:/Program Files/Blender Foundation/Blender 5.2/blender.exe")
 _UPLOAD_LIMIT_MEGABYTES = 200.0
 _BUILT_IN_PRESETS = ("presets/bone_maps/Mixamo.json", "presets/bone_maps/Rigify.json")
+_LICENCE_FILES = ("THIRD_PARTY_NOTICES.md", "LICENSES/Apache-2.0.txt", "LICENSES/GPL-3.0-or-later.txt")
 _EXPECTED_PACKAGES = {"mediapipe", "cv2"}
 
 
@@ -65,10 +67,22 @@ def check_zip(zip_path: Path) -> None:
         *(wheel.removeprefix("./") for wheel in manifest["wheels"]),
         *(f"models/{file_name}" for file_name in MODEL_FILE_NAMES),
         *_BUILT_IN_PRESETS,
+        *_LICENCE_FILES,
     }
     missing = sorted(expected - names)
     if missing:
         raise BuildError(f"Missing in {zip_path.name}: {', '.join(missing)}.")
+    repository_licence = (_REPOSITORY_FOLDER / "LICENSE").read_text(encoding="utf-8")
+    extension_licence = (_EXTENSION_FOLDER / "LICENSES" / "GPL-3.0-or-later.txt").read_text(encoding="utf-8")
+    if repository_licence != extension_licence:
+        raise BuildError("LICENSES/GPL-3.0-or-later.txt differs from the repository's LICENSE.")
+    mediapipe_wheels = [wheel for wheel in manifest["wheels"] if Path(wheel).name.startswith("mediapipe-")]
+    if len(mediapipe_wheels) != 1:
+        raise BuildError(f"Expected one mediapipe wheel in the manifest, found {len(mediapipe_wheels)}.")
+    try:
+        verify_wheel(_EXTENSION_FOLDER / mediapipe_wheels[0])
+    except PatchError as error:
+        raise BuildError(str(error)) from error
     compiled = sorted(name for name in names if "__pycache__" in name or name.endswith(".pyc"))
     if compiled:
         raise BuildError(f"Compiled Python files in {zip_path.name}: {', '.join(compiled[:5])}.")

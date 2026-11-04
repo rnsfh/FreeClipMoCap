@@ -103,6 +103,8 @@
 | Tests (2026-11-03) | `unittest` (built in), run with Blender's `python.exe` or headless `blender.exe` for bpy parts; `Tests/` mirrors the package layout |
 | Build tools (2026-11-03) | Python, run with Blender's `python.exe`. The telemetry patch is ported from `PatchMediaPipeTelemetry.cs` into the wheel repack tool and the C# file retired, so building needs no .NET |
 | Patched mediapipe wheel (2026-11-03) | Keeps PyPI's name and version (`mediapipe-1.2.0-py3-none-win_amd64.whl`); only the two patched files and their `RECORD` hashes change. The build tool refuses an unpatched DLL |
+| Licence notices (2026-11-04) | `THIRD_PARTY_NOTICES.md` + `LICENSES/Apache-2.0.txt` (canonical text from apache.org) + `LICENSES/GPL-3.0-or-later.txt` (a copy of the repo's `LICENSE`, the build checks they match) in `src/freeclipmocap/`, so they ship in the zip; the repack tool also adds `licenses/MODIFICATIONS` to the mediapipe wheel's dist-info, listed in `RECORD`, so the notice travels with the changed files (the user). The wheel keeps PyPI's name and version. `build_extension.py` refuses a zip without these |
+| Model licences (checked 2026-11-04) | Apache-2.0, as stated in the model cards: BlazePose GHUM 3D (pose lite/full/heavy) and Hand Tracking (Lite/Full) Oct 2021. The `.task` files carry no licence metadata themselves |
 | Development install (2026-11-03) | A directory junction from Blender's user extensions folder to `src/freeclipmocap/`, made once by a script; the build tool puts the patched wheels and the models into `src/freeclipmocap/wheels/` and `models/` (generated) |
 
 ## Open questions

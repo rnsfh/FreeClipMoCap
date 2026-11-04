@@ -13,6 +13,25 @@ _BLOCKED_ENDPOINT = b"https://127.0.0.1:1/blocked0000"
 _TOP_LEVEL_MATPLOTLIB_IMPORT = b"\nimport matplotlib.pyplot as plt\n"
 _FIRST_PLOT_CALL = b"\n  plt.figure(figsize=(10, 10))\n"
 _LAZY_MATPLOTLIB_IMPORT = b"\n  import matplotlib.pyplot as plt"
+_MODIFICATIONS_NOTICE_NAME = "licenses/MODIFICATIONS"
+_MODIFICATIONS_NOTICE = f"""\
+This copy of the mediapipe wheel was modified by FreeClipMocap (https://github.com/rnsfh/FreeClipMoCap), as
+section 4(b) of the Apache License 2.0 asks. Every other file is as published on PyPI.
+
+Changed files:
+
+{_LIBRARY_PATH}
+  The usage-report (telemetry) address {_TELEMETRY_ENDPOINT.decode("ascii")} is replaced by
+  {_BLOCKED_ENDPOINT.decode("ascii")}, an address of the same length that cannot be reached, so the library
+  cannot send usage reports. Nothing else in the library is changed.
+
+{_DRAWING_UTILS_PATH}
+  matplotlib is imported inside plot_landmarks instead of at the top of the module, so importing MediaPipe
+  does not need matplotlib.
+
+The hashes in RECORD are updated to match, and this notice is added. The changes are made by
+Tools/repack_mediapipe_wheel.py in the FreeClipMocap repository. MediaPipe's own LICENSE and NOTICE are unchanged.
+""".encode("utf-8")
 
 
 class PatchError(Exception):
@@ -61,15 +80,30 @@ def record_hash(content: bytes) -> str:
     return "sha256=" + base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
-def update_record(record: bytes, contents_by_path: dict[str, bytes]) -> bytes:
+def record_line(path: str, content: bytes) -> str:
+    return f"{path},{record_hash(content)},{len(content)}"
+
+
+def update_record(record: bytes, record_path: str, contents_by_path: dict[str, bytes]) -> bytes:
     updated_lines: list[str] = []
+    listed_paths: set[str] = set()
     for line in record.decode("utf-8").splitlines():
         path = line.rsplit(",", 2)[0]
+        listed_paths.add(path)
+        if path == record_path:
+            continue
         if path in contents_by_path:
-            content = contents_by_path[path]
-            line = f"{path},{record_hash(content)},{len(content)}"
+            line = record_line(path, contents_by_path[path])
         updated_lines.append(line)
+    for path, content in contents_by_path.items():
+        if path not in listed_paths:
+            updated_lines.append(record_line(path, content))
+    updated_lines.append(f"{record_path},,")
     return ("\n".join(updated_lines) + "\n").encode("utf-8")
+
+
+def modifications_notice_path(record_path: str) -> str:
+    return f"{record_path.rsplit('/', 1)[0]}/{_MODIFICATIONS_NOTICE_NAME}"
 
 
 def find_record_path(wheel: zipfile.ZipFile) -> str:
@@ -95,6 +129,9 @@ def verify_wheel(wheel_path: Path) -> None:
             raise PatchError(f"The library in {wheel_path} is not patched.")
         if wheel.read(_DRAWING_UTILS_PATH).count(_TOP_LEVEL_MATPLOTLIB_IMPORT) != 0:
             raise PatchError(f"drawing_utils.py in {wheel_path} still imports matplotlib at the top.")
+        notice_path = modifications_notice_path(record_path)
+        if notice_path not in wheel.namelist() or wheel.read(notice_path) != _MODIFICATIONS_NOTICE:
+            raise PatchError(f"{wheel_path} lacks the current modification notice {notice_path}.")
 
 
 def repack_mediapipe_wheel(source_wheel_path: Path, output_folder: Path) -> RepackResult:
@@ -108,15 +145,21 @@ def repack_mediapipe_wheel(source_wheel_path: Path, output_folder: Path) -> Repa
         patched_drawing_utils, drawing_utils_was_already_patched = patch_drawing_utils(
             source_wheel.read(_DRAWING_UTILS_PATH)
         )
+        notice_path = modifications_notice_path(record_path)
         patched_contents_by_path = {
             _LIBRARY_PATH: patched_library,
             _DRAWING_UTILS_PATH: patched_drawing_utils,
+            notice_path: _MODIFICATIONS_NOTICE,
         }
         patched_contents_by_path[record_path] = update_record(
-            source_wheel.read(record_path), patched_contents_by_path
+            source_wheel.read(record_path), record_path, patched_contents_by_path
         )
+        source_paths = set(source_wheel.namelist())
         with zipfile.ZipFile(temporary_path, "w", compression=zipfile.ZIP_DEFLATED) as output_wheel:
             for entry in source_wheel.infolist():
+                if entry.filename == record_path and notice_path not in source_paths:
+                    notice_entry = zipfile.ZipInfo(notice_path, date_time=entry.date_time)
+                    output_wheel.writestr(notice_entry, _MODIFICATIONS_NOTICE, compress_type=zipfile.ZIP_DEFLATED)
                 content = patched_contents_by_path.get(entry.filename)
                 if content is None:
                     content = source_wheel.read(entry)
@@ -138,12 +181,14 @@ def print_result(result: RepackResult) -> None:
     print(f"Library SHA-256 after:   {result.library_sha256_after}")
     print(f"Library:                 {'already patched' if result.library_was_already_patched else 'patched'}")
     print(f"drawing_utils.py:        {'already patched' if result.drawing_utils_was_already_patched else 'patched'}")
+    print(f"Notice:                  {_MODIFICATIONS_NOTICE_NAME} in the dist-info folder")
     print("RECORD verified.")
 
 
 def main() -> int:
     argument_parser = argparse.ArgumentParser(
-        description="Copy a mediapipe wheel with the telemetry endpoint blocked and matplotlib imported lazily."
+        description="Copy a mediapipe wheel with the telemetry endpoint blocked, matplotlib imported lazily and a "
+        "notice of these changes added to its dist-info folder."
     )
     argument_parser.add_argument("source_wheel", type=Path)
     argument_parser.add_argument("output_folder", type=Path)

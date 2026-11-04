@@ -112,6 +112,13 @@ Totals: single camera polished (0–3) ≈ 12–23 sessions ≈ 30–100 M token
 - [x] Windows build: `Tools/build_extension.py` → `dist/freeclipmocap-<version>.zip` (2026-11-03; 0.2.0 since Compare
       View and the calibration core). Linux/macOS later
       (other wheels; MediaPipe's telemetry patch must be redone for each platform's library).
+- [x] Licence notices (2026-11-04): `THIRD_PARTY_NOTICES.md`, `LICENSES/Apache-2.0.txt` and
+      `LICENSES/GPL-3.0-or-later.txt` (a copy of the repo's `LICENSE`) in the extension; the repacked mediapipe wheel
+      carries `dist-info/licenses/MODIFICATIONS` (Apache-2.0 §4(b)). The four models are Apache-2.0 per their model
+      cards. The build checks all of these.
+- [ ] Open licence question before submitting: OpenCV's wheel statically links Intel IPP ICV under the Intel
+      Simplified Software License (GPL compatibility not settled).
+- [ ] Store page: icon, featured image, screenshots, description (stating the MediaPipe change).
 - [ ] Submit to extensions.blender.org.
 
 ## Phase 4: multi-camera
