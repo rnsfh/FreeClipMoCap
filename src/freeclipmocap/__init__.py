@@ -4,6 +4,7 @@ from .ui import (
     capture_operators,
     compare_view,
     export_operators,
+    ik_operators,
     panel,
     properties,
     solve_operator,
@@ -21,6 +22,7 @@ _modules = (
     calibration_operators,
     compare_view,
     export_operators,
+    ik_operators,
     panel,
 )
 

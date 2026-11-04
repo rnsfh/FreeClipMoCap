@@ -11,6 +11,8 @@ _LONGEST_CONTACT_GAP_FRAMES = 2
 _SHORTEST_CONTACT_FRAMES = 3
 _LOCK_BLEND_FRAMES = 3
 _IN_PLACE_WINDOW_SECONDS = 1.5
+_SMALLEST_HEADING_SHARE = 0.05
+_LARGEST_KNEE_CHANGE_DEGREES = 3.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,7 +87,10 @@ def ground(
     root_motion: bool,
 ) -> Grounding:
     frame_count = len(timestamps_seconds)
-    up = _nearest_axis(body_up)
+    up = rotations.nearest_axis(body_up)
+    weights = _lock_weights(contacts)
+    flat_feet = _flattened_feet(rig, globals_by_index, legs, weights, up)
+    globals_by_index = _with_turned_bones(rig, globals_by_index, flat_feet)
     rest_heights = [_point_heights(rig.heads[None], rig.tails[None], leg, up)[0] for leg in legs]
     floor = min(float(heights.min()) for heights in rest_heights)
     clearances = [heights - floor for heights in rest_heights]
@@ -102,9 +107,10 @@ def ground(
     root_translation = travel + lift[:, None] * up
 
     root_heads, _root_tails = joint_positions(rig, globals_by_index, hips_index, root_translation)
-    targets, weights = _planted_targets(root_heads, legs, contacts, distances + lift, up)
+    targets = _planted_targets(root_heads, legs, contacts, weights, distances + lift, up)
     root_translation = root_translation - _reach_drop(rig, root_heads, legs, targets, weights, up)[:, None] * up
     leg_rotations = _lock_planted_feet(rig, globals_by_index, hips_index, legs, targets, weights, root_translation, front)
+    leg_rotations.update(flat_feet)
     hips_translation = root_translation
     if not root_motion and frame_count > 1:
         frame_seconds = max(float(np.median(np.diff(timestamps_seconds))), 1e-4)
@@ -135,24 +141,81 @@ def _travel(ankles: np.ndarray, contacts: np.ndarray, up: np.ndarray) -> np.ndar
     return np.concatenate((np.zeros((1, 3)), np.cumsum(-mean_step, axis=0)))
 
 
+def _lock_weights(contacts: np.ndarray) -> np.ndarray:
+    frame_count = contacts.shape[1]
+    weights = np.zeros(contacts.shape)
+    for leg_index, planted in enumerate(contacts):
+        for start, stop in _runs(planted):
+            steps_in = np.arange(stop - start, dtype=np.float64)
+            blend_in = steps_in + 1 if start > 0 else np.inf
+            blend_out = stop - start - steps_in if stop < frame_count else np.inf
+            weights[leg_index, start:stop] = np.minimum(1.0, np.minimum(blend_in, blend_out) / (_LOCK_BLEND_FRAMES + 1))
+    return weights
+
+
+def _flattened_feet(
+    rig: RigRest, globals_by_index: dict[int, np.ndarray], legs: tuple[LegChain, ...], weights: np.ndarray, up: np.ndarray
+) -> dict[int, np.ndarray]:
+    flat_feet: dict[int, np.ndarray] = {}
+    for leg_index, leg in enumerate(legs):
+        rest_rotation = rig.rest_rotations[leg.foot]
+        tracked = globals_by_index[leg.foot]
+        rest_heading = _horizontal(rig.tails[leg.foot] - rig.heads[leg.foot], up)
+        if np.linalg.norm(rest_heading) < _SMALLEST_HEADING_SHARE * np.linalg.norm(rig.tails[leg.foot] - rig.heads[leg.foot]):
+            flat_feet[leg.foot] = tracked
+            continue
+        heading = _horizontal(np.einsum("fij,jk,k->fi", tracked, rest_rotation.T, rest_heading), up)
+        is_upright = np.linalg.norm(heading, axis=-1) < _SMALLEST_HEADING_SHARE * np.linalg.norm(rest_heading)
+        heading[is_upright] = rest_heading
+        flat = _turns_about(up, _signed_angles(rest_heading, heading, up)) @ rest_rotation
+        flat_feet[leg.foot] = rotations.slerp_matrices(tracked, flat, weights[leg_index])
+    return flat_feet
+
+
+def _with_turned_bones(
+    rig: RigRest, globals_by_index: dict[int, np.ndarray], turned: dict[int, np.ndarray]
+) -> dict[int, np.ndarray]:
+    updated = dict(globals_by_index)
+    turns: dict[int, np.ndarray] = {}
+    for index, parent in enumerate(rig.parent_indices):
+        if index in turned:
+            turns[index] = turned[index] @ np.swapaxes(globals_by_index[index], -1, -2)
+        elif parent in turns and index in globals_by_index:
+            turns[index] = turns[parent]
+        else:
+            continue
+        updated[index] = turns[index] @ globals_by_index[index]
+    return updated
+
+
+def _signed_angles(from_vector: np.ndarray, to_vectors: np.ndarray, axis: np.ndarray) -> np.ndarray:
+    return np.arctan2(np.cross(from_vector, to_vectors) @ axis, to_vectors @ from_vector)
+
+
+def _turns_about(axis: np.ndarray, angles: np.ndarray) -> np.ndarray:
+    cross = np.array([[0.0, -axis[2], axis[1]], [axis[2], 0.0, -axis[0]], [-axis[1], axis[0], 0.0]])
+    sine = np.sin(angles)[:, None, None]
+    cosine = np.cos(angles)[:, None, None]
+    return np.eye(3) + sine * cross + (1.0 - cosine) * (cross @ cross)
+
+
 def _planted_targets(
-    heads: np.ndarray, legs: tuple[LegChain, ...], contacts: np.ndarray, floor_distances: np.ndarray, up: np.ndarray
-) -> tuple[np.ndarray, np.ndarray]:
-    frame_count = len(heads)
-    targets = np.empty((len(legs), frame_count, 3))
-    weights = np.zeros((len(legs), frame_count))
+    heads: np.ndarray,
+    legs: tuple[LegChain, ...],
+    contacts: np.ndarray,
+    weights: np.ndarray,
+    floor_distances: np.ndarray,
+    up: np.ndarray,
+) -> np.ndarray:
+    targets = np.empty((len(legs), len(heads), 3))
     for leg_index, leg in enumerate(legs):
         ankle = heads[:, leg.foot]
         target = ankle - floor_distances[leg_index][:, None] * up
         for start, stop in _runs(contacts[leg_index]):
             held = np.median(_horizontal(ankle[start:stop], up), axis=0)
             target[start:stop] = held + (target[start:stop] @ up)[:, None] * up
-            steps_in = np.arange(stop - start, dtype=np.float64)
-            blend_in = steps_in + 1 if start > 0 else np.inf
-            blend_out = stop - start - steps_in if stop < frame_count else np.inf
-            weights[leg_index, start:stop] = np.minimum(1.0, np.minimum(blend_in, blend_out) / (_LOCK_BLEND_FRAMES + 1))
         targets[leg_index] = ankle + weights[leg_index][:, None] * (target - ankle)
-    return targets, weights
+    return targets
 
 
 def _reach_drop(
@@ -186,13 +249,6 @@ def _stance(targets: np.ndarray, contacts: np.ndarray, travel: np.ndarray, up: n
         known = np.array(known_spots)
         spots.append(np.stack([np.interp(frames, known_frames, known[:, axis]) for axis in range(3)], axis=-1))
     return np.mean(spots, axis=0) if spots else travel
-
-
-def _nearest_axis(vector: np.ndarray) -> np.ndarray:
-    axis = int(np.argmax(np.abs(vector)))
-    snapped = np.zeros(3)
-    snapped[axis] = np.sign(vector[axis])
-    return snapped
 
 
 def _lock_planted_feet(
@@ -240,7 +296,13 @@ def _two_bone_ik(
     knee_front: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
     reach = target - hip
-    distance = np.clip(np.linalg.norm(reach, axis=-1), abs(thigh_length - shin_length), thigh_length + shin_length)
+    tracked_bend = np.arccos(np.clip(np.sum(rotations.normalized(knee - hip) * rotations.normalized(ankle - knee), axis=-1), -1.0, 1.0))
+    # Near a straight knee a few millimetres of reach cost many degrees of bend, so the lock may turn the knee only a
+    # little away from the tracked bend; the foot then stays that little short of (or past) its target instead.
+    largest_change = np.radians(_LARGEST_KNEE_CHANGE_DEGREES)
+    shortest = _leg_reach(thigh_length, shin_length, np.minimum(tracked_bend + largest_change, np.pi))
+    longest = _leg_reach(thigh_length, shin_length, np.maximum(tracked_bend - largest_change, 0.0))
+    distance = np.clip(np.linalg.norm(reach, axis=-1), shortest, longest)
     along = rotations.normalized(reach)
     bend = knee - hip
     knee_side = bend - np.sum(bend * along, axis=-1, keepdims=True) * along
@@ -254,6 +316,10 @@ def _two_bone_ik(
     turned_shin = np.einsum("fij,fj->fi", thigh_turn, ankle - knee)
     shin_turn = rotations.rotation_between(turned_shin, new_ankle - new_knee)
     return thigh_turn @ thigh, shin_turn @ thigh_turn @ shin
+
+
+def _leg_reach(thigh_length: float, shin_length: float, bend: np.ndarray) -> np.ndarray:
+    return np.sqrt(thigh_length**2 + shin_length**2 + 2.0 * thigh_length * shin_length * np.cos(bend))
 
 
 def _horizontal(vectors: np.ndarray, up: np.ndarray) -> np.ndarray:

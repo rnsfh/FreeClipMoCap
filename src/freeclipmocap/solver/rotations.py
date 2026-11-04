@@ -61,6 +61,13 @@ def quaternions_from_matrices(matrices: np.ndarray) -> np.ndarray:
     return quaternions * np.where(quaternions[..., :1] < 0, -1.0, 1.0)
 
 
+def nearest_axis(vector: np.ndarray) -> np.ndarray:
+    axis = int(np.argmax(np.abs(vector)))
+    snapped = np.zeros(3)
+    snapped[axis] = np.sign(vector[axis])
+    return snapped
+
+
 def slerp(start: np.ndarray, end: np.ndarray, fraction: np.ndarray | float) -> np.ndarray:
     fraction = np.asarray(fraction, dtype=np.float64)
     if fraction.ndim > 0:

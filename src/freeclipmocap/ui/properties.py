@@ -277,6 +277,12 @@ class FreeClipMocapProperties(bpy.types.PropertyGroup, CalibrationLensSettings):
         default=True,
         update=lambda self, context: redraw_clip_editors(context),
     )
+    use_all_cameras: bpy.props.BoolProperty(
+        name="All Cameras",
+        description="Solve from every camera's video, its points triangulated through the calibration (needs Capture "
+        "of every video and Calibrate with the current Sync). Off: camera 1 only, depth guessed by the tracker",
+        default=True,
+    )
     root_motion: bpy.props.BoolProperty(
         name="Root Motion",
         description="Let the body travel across the floor as in the video. Off: in place, the hips still move up "

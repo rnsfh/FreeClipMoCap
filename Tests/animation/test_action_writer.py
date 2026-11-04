@@ -7,6 +7,7 @@ import numpy as np
 from mathutils import Quaternion
 
 from bl_ext.user_default.freeclipmocap.animation.action_writer import key_tolerances, write_take
+from bl_ext.user_default.freeclipmocap.animation.ik_controls import muted_ik_controls
 from bl_ext.user_default.freeclipmocap.capture.landmark_cache import LandmarkCache, VideoSource, cache_path_for
 from bl_ext.user_default.freeclipmocap.solver.pose_solver import SolvedTake
 
@@ -142,6 +143,8 @@ class SolveOperatorTests(unittest.TestCase):
             (name, None if parent < 0 else rig.bone_names[parent], tuple(head), tuple(tail))
             for name, parent, head, tail in zip(rig.bone_names, rig.parent_indices, rig.heads, rig.tails)
         ]
+        self.objects_before = set(bpy.data.objects)
+        self.collections_before = set(bpy.data.collections)
         self.armature_object = create_armature("SmartRigArmature", bones)
         rest = rest_landmarks(rig)
         bent = {name: points.copy() for name, points in rest.items()}
@@ -177,6 +180,10 @@ class SolveOperatorTests(unittest.TestCase):
     def tearDown(self) -> None:
         bpy.context.scene.freeclipmocap.target_armature = None
         remove_armature(self.armature_object)
+        for obj in set(bpy.data.objects) - self.objects_before:
+            bpy.data.objects.remove(obj)
+        for collection in set(bpy.data.collections) - self.collections_before:
+            bpy.data.collections.remove(collection)
         for action in set(bpy.data.actions) - self.actions_before:
             bpy.data.actions.remove(action)
         self.temporary_folder.cleanup()
@@ -206,6 +213,26 @@ class SolveOperatorTests(unittest.TestCase):
         wrist = self.armature_object.matrix_world @ self.armature_object.pose.bones["mixamorig:LeftHand"].head
         elbow = self.armature_object.matrix_world @ forearm.head
         self.assertLess((wrist - elbow).normalized().y, -0.99)
+
+    def test_solving_again_with_ik_controls_keys_the_targets_to_the_new_take(self) -> None:
+        bpy.ops.freeclipmocap.solve()
+        bpy.ops.freeclipmocap.add_ik_controls()
+        target = bpy.data.objects["SmartRigArmature IK Left Arm"]
+        target.animation_data.action.fcurve_ensure_for_datablock(target, "location", index=2).keyframe_points[0].co.y += 0.1
+        objects_before = set(bpy.data.objects)
+
+        self.assertEqual(bpy.ops.freeclipmocap.solve(), {"FINISHED"})
+
+        self.assertEqual(set(bpy.data.objects), objects_before)
+        scene = bpy.context.scene
+        scene.frame_set(31)
+        hand = self.armature_object.pose.bones["mixamorig:LeftHand"]
+        with_ik = np.array(hand.head)
+        with muted_ik_controls(self.armature_object):
+            scene.frame_set(31)
+            without_ik = np.array(hand.head)
+        self.assertLess(float(np.abs(with_ik - without_ik).max()), 0.001)
+        self.assertLess(float(np.abs(np.array(target.matrix_world.translation) - with_ik).max()), 0.001)
 
     def test_solve_uses_only_the_chosen_video_frames_and_keeps_them_under_the_video(self) -> None:
         properties = bpy.context.scene.freeclipmocap

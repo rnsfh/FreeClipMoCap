@@ -4,6 +4,7 @@ import bpy
 
 from ..capture.capture_job import CaptureJob
 from ..capture.landmark_cache import LandmarkCache, cache_path_for, find_current_cache
+from .video_operators import take_video_paths
 
 MODELS_FOLDER = Path(__file__).resolve().parent.parent / "models"
 _TIMER_INTERVAL_SECONDS = 0.2
@@ -13,6 +14,7 @@ class CaptureState:
     def __init__(self) -> None:
         self.job: CaptureJob | None = None
         self.status_message = ""
+        self.camera_label = ""
 
     @property
     def is_running(self) -> bool:
@@ -24,6 +26,9 @@ class CaptureState:
     def set_status_message(self, message: str) -> None:
         self.status_message = message
 
+    def set_camera_label(self, label: str) -> None:
+        self.camera_label = label
+
 
 capture_state = CaptureState()
 
@@ -31,7 +36,10 @@ capture_state = CaptureState()
 class CaptureOperator(bpy.types.Operator):
     bl_idname = "freeclipmocap.capture"
     bl_label = "Capture"
-    bl_description = "Track the body and hands in every frame of the video and cache the landmarks next to it"
+    bl_description = (
+        "Track the body and hands in every frame of the video and cache the landmarks next to it. "
+        "With several cameras, every camera's video is captured in turn"
+    )
 
     _timer: bpy.types.Timer | None = None
 
@@ -41,24 +49,33 @@ class CaptureOperator(bpy.types.Operator):
 
     def invoke(self, context: bpy.types.Context, event: bpy.types.Event) -> set[str]:
         properties = context.scene.freeclipmocap
-        video_path = Path(bpy.path.abspath(properties.video_path))
-        if not video_path.is_file():
-            self.report({"ERROR"}, f"Video not found: {video_path}")
-            return {"CANCELLED"}
+        video_paths = take_video_paths(properties)
+        for camera_number, video_path in enumerate(video_paths, start=1):
+            if not video_path.is_file():
+                what = f"Camera {camera_number}: video" if len(video_paths) > 1 else "Video"
+                self.report({"ERROR"}, f"{what} not found: {video_path}")
+                return {"CANCELLED"}
         settings = properties.capture_settings()
-        existing_cache_path = find_current_cache(video_path, settings)
-        if existing_cache_path is not None:
+        self._camera_count = len(video_paths)
+        self._messages: list[str] = []
+        self._pending: list[tuple[int, Path]] = []
+        for camera_number, video_path in enumerate(video_paths, start=1):
+            existing_cache_path = find_current_cache(video_path, settings)
+            if existing_cache_path is None:
+                self._pending.append((camera_number, video_path))
+                continue
             existing_cache = LandmarkCache.load(existing_cache_path)
-            fill_end_frame(properties, existing_cache)
-            message = summarize(existing_cache, "Already captured")
+            if camera_number == 1:
+                fill_end_frame(properties, existing_cache)
+            self._messages.append(self._camera_prefix(camera_number) + summarize(existing_cache, "Already captured"))
+        if not self._pending:
+            message = " ".join(self._messages)
             capture_state.set_status_message(message)
             self.report({"INFO"}, message)
             return {"FINISHED"}
 
-        job = CaptureJob(video_path, settings, MODELS_FOLDER, cache_path_for(video_path, settings))
-        capture_state.set_job(job)
         capture_state.set_status_message("")
-        job.start()
+        self._start_next(context)
         self._timer = context.window_manager.event_timer_add(_TIMER_INTERVAL_SECONDS, window=context.window)
         context.window_manager.modal_handler_add(self)
         return {"RUNNING_MODAL"}
@@ -71,8 +88,12 @@ class CaptureOperator(bpy.types.Operator):
         if event.type == "TIMER":
             redraw_sidebars(context)
             if not job.is_running:
+                succeeded = self._record_result(context, job)
+                if succeeded and self._pending:
+                    self._start_next(context)
+                    return {"PASS_THROUGH"}
                 self._finish(context)
-                self._report_result(context, job)
+                self._report_results(succeeded)
                 return {"FINISHED"}
         return {"PASS_THROUGH"}
 
@@ -81,22 +102,45 @@ class CaptureOperator(bpy.types.Operator):
             capture_state.job.cancel()
         self._finish(context)
 
+    def _camera_prefix(self, camera_number: int) -> str:
+        return f"Camera {camera_number}: " if self._camera_count > 1 else ""
+
+    def _start_next(self, context: bpy.types.Context) -> None:
+        camera_number, video_path = self._pending.pop(0)
+        settings = context.scene.freeclipmocap.capture_settings()
+        job = CaptureJob(video_path, settings, MODELS_FOLDER, cache_path_for(video_path, settings))
+        job.set_camera_number(camera_number)
+        capture_state.set_job(job)
+        capture_state.set_camera_label(self._camera_prefix(camera_number))
+        job.start()
+
     def _finish(self, context: bpy.types.Context) -> None:
         if self._timer is not None:
             context.window_manager.event_timer_remove(self._timer)
             self._timer = None
+        capture_state.set_camera_label("")
         redraw_sidebars(context)
 
-    def _report_result(self, context: bpy.types.Context, job: CaptureJob) -> None:
+    def _record_result(self, context: bpy.types.Context, job: CaptureJob) -> bool:
+        prefix = self._camera_prefix(job.camera_number)
         if job.cache is not None:
-            fill_end_frame(context.scene.freeclipmocap, job.cache)
-            message = summarize(job.cache, "Captured")
-            self.report({"INFO"}, f"{message} Cache: {job.cache_path}")
-        elif job.was_cancelled:
-            message = "Capture cancelled."
+            if job.camera_number == 1:
+                fill_end_frame(context.scene.freeclipmocap, job.cache)
+            self._messages.append(f"{prefix}{summarize(job.cache, 'Captured')} Cache: {job.cache_path}")
+            return True
+        if job.was_cancelled:
+            self._messages.append(f"{prefix}Capture cancelled.")
+        else:
+            self._messages.append(f"{prefix}Capture failed: {job.error_message}")
+        return False
+
+    def _report_results(self, succeeded: bool) -> None:
+        message = " ".join(self._messages)
+        if succeeded:
+            self.report({"INFO"}, message)
+        elif capture_state.job is not None and capture_state.job.was_cancelled:
             self.report({"WARNING"}, message)
         else:
-            message = f"Capture failed: {job.error_message}"
             self.report({"ERROR"}, message)
         capture_state.set_status_message(message)
 

@@ -108,7 +108,10 @@ Steps of a Solve (`solver/pose_solver.py`, built 2026-11-03):
      contacts it is interpolated; then smoothed with the clip's smoothing. *Hips travel*: a planted foot does not
      move, so the body moves by the opposite of its step.
    - *Foot lock*: each planted stretch holds the ankle at its median spot on the floor; two-bone IK (thigh + shin,
-     knee kept in its plane, foot orientation kept) reaches it, blended in and out over 3 frames. When a straight leg
+     knee kept in its plane) reaches it, blended in and out over 3 frames. The lock may turn a knee at most 3°
+     away from the tracked bend (near a straight knee a few mm of reach cost many degrees); the foot then stays that
+     little off its target. A planted foot is turned flat (its rest
+     tilt, MediaPipe's heading), so the ankle sits at its rest height; the toes turn with it. When a straight leg
      cannot reach, the hips are lowered just enough.
    - *In place* (Root Motion off): each foot's planted spot is followed over the clip (moving only when that foot
      lands somewhere new); the slow drift of their average (1.5 s window) is taken off the hips, so leans, crouches
@@ -172,6 +175,29 @@ and Solve sets the scene range to them; the Set buttons (eyedropper) copy the cu
 - Both open Blender's file dialog, proposing `<take name>.fbx/.bvh` next to the video; an existing file shows red
   and the user confirms overwriting.
 
+### IK/FK (`animation/ik_controls.py`, `ui/ik_operators.py`, 2026-11-04)
+
+- **Add IK Controls** (needs a take): per mapped limb (legs: UpLeg/Leg/Foot, arms: Arm/ForeArm/Hand) a target empty
+  `<armature> IK <limb>` and a pole empty `<armature> Pole <limb>`, parented to the armature, in the collection
+  `<armature> IK Controls`. The shin/forearm gets `FreeClipMocap IK` (chain 2, target, pole, no stretch), the
+  foot/hand `FreeClipMocap IK Rotation` (Copy Rotation of the target). Both influences are driven (plain Average
+  driver, no Python) by the armature's custom property `IK <limb>`: 0 = FK, 1 = IK, keyable.
+- **Targets follow FK:** the take is played once with the IK muted; the target is keyed at the shin/forearm tail
+  with the foot/hand rotation, the pole beside the knee/elbow (key reduction within 0.1% of the limb length and
+  0.25°). Blender's IK turns the chain so that the root bone's axis at the pole angle points, across the
+  root-to-target line, like the pole seen from the target; the pole angle is fixed from the upper bone's bend
+  axis (rig front for knees, back for elbows) and the pole is placed out from that line along the same axis, so
+  the FK pose is exactly an IK solution (within 0.25° and 1 mm on the user's rig).
+- **Solve** mutes the IK while writing (the constraint matching would otherwise fight it) and keys the targets to
+  the new take. **Match IK to FK** keys them again (after FK edits; replaces target edits, after asking).
+  **Remove IK Controls** deletes the empties, constraints, drivers and sliders; *Keep the Pose* (default) first
+  bakes the evaluated pose into the FK keys of every limb IK actually changed (> 0.05°), untouched limbs keep
+  their keys.
+- **Export:** FBX and BVH read Blender's evaluated pose, so IK is exported as shown. FBX shifts the IK targets'
+  keys with the take's while it starts the take at frame 0.
+- Blender's IK starts from the pose it solved last, so a frame can differ by a few hundredths of a degree
+  depending on the frame before.
+
 Kept free of `bpy` (decided 2026-11-03), so it is tested on its own with Blender's `python.exe`, without Blender's UI.
 
 - **Solver:** landmark points → per-bone rotations against the target rig's rest pose.
@@ -191,14 +217,18 @@ Built so far (2026-11-03):
 
 - **Panel** (`ui/calibration_operators.py`, `ui/phone_cameras.py`): the Video section lists the cameras (camera 1 is `video_path`, cameras 2+ the `extra_videos` collection with their Sync offsets); Add Camera, remove, Sync by Sound. With two or more cameras a Calibration box: Method (Board or Body; Body shows Phones Apart instead of the board settings), Save Board Image (A4 PNG), Square (mm), Paper (A4, Letter or Custom with Below Squares in mm), a Lens menu per camera (Measure, Typed with a focal length in mm and Keep Fixed, or a saved lens, with Save Lens and Delete Lens; the last calibration's focal length shown in mm), Separate Calibration Videos, Start/End, Calibrate (background job `capture/calibration_job.py` with one progress bar over the cameras, Cancel). The result is applied as one Blender camera per phone (`FreeClipMocap Phone N`) with its take video behind it. Show Video stacks one Movie Clip Editor per camera, each clip started by its Sync offset (`ui/video_operators.py`, shared with the phone cameras).
 
-- **Sync** (`solver/audio_sync.py`, `ui/video_audio.py`): each video's sound is read with Blender's `aud` module and turned into a 1 kHz onset curve (rises in loudness, so gain and sample rate do not matter); the curves are cross-correlated and the peak gives how much later the other camera started (within ~1 ms on test sounds). A clap at the start makes the peak sharp.
+- **Sync** (`solver/audio_sync.py`, `ui/video_audio.py`): each video's sound is read with Blender's `aud` module and turned into a 1 kHz onset curve (rises in loudness, so gain and sample rate do not matter); the curves are cross-correlated and the peak gives how much later the other camera started (within ~1 ms on test sounds). A clap at the start makes the peak sharp. Loudness below 10× the take's median makes no onsets, so room hiss in a quiet take does not swamp the clap (2026-11-04).
 - **Board** (`capture/board_detection.py`): ChArUco 4×5, 48 mm nominal, `DICT_4X4_50`; the page image to print (A4, 300 dpi); `detect_board` reads a frame range of a video and records, per frame, the 12 inner corners (NaN where unseen) with the video's own timestamps (`capture/board_sightings.py`).
 - **Saved lenses** (`capture/saved_lens.py`, `ui/lens_folder.py`): `SavedLens` (name, video size, camera matrix, distortion, fit error), one JSON per lens in the extension's user folder under `lenses/`, saved from the last calibration's camera.
 - **Calibration** (`capture/camera_calibration.py`): each lens from its own board views (or a saved lens, kept fixed; or a typed focal length, kept fixed or used as the starting point), then each further camera against the first: its corners interpolated to the first camera's frame times (start delay from the sound plus a board-based correction of up to ±60 ms), both lenses and the relative pose refined together by OpenCV's `stereoCalibrate`. The floor from a still board standing on it (its bottom edge the given distance below the squares) or lying on it; world axes: Z up, Y the first camera's level view direction, origin on the floor below where the view axes meet.
 - **Calibration from the body** (`capture/body_calibration.py`): the background job loads each video's landmark cache (or captures it first); 16 body joints of each camera interpolated to camera 1's frame times, essential matrix (RANSAC) for each further camera against camera 1, the sound offset refined within ±60 ms, left/right swaps undone per frame, cameras 3+ by PnP on the first pair's triangulated joints, then a joint refinement (linear triangulation inside, Cauchy loss, camera 2 held at the measured distance). Lenses as typed or saved, never refined. Floor from the planted feet.
 - **Result** (`capture/camera_setup.py`): `CameraSetup`, one `CalibratedCamera` per video (OpenCV camera matrix and 5 distortion values, world→camera rotation and translation in OpenCV axes: x right, y down, z forward), how the floor was found and its frames, the fit errors. Saved as JSON next to the first camera's video.
 
-Still to build: capture of each video (the existing single-camera capture, one cache per video), triangulation into 3D points, the solver reading them, and the floor from the triangulated feet when no floor shot was found.
+- **Capture** (`ui/capture_operators.py`): every camera's video in turn, one cache per video (a camera already captured with the same settings is skipped).
+- **Triangulation** (`solver/triangulation.py`, numpy, 2026-11-04): camera 1's frames are the time base; each camera's 2D points are read at the same moment (Sync offset plus the calibration's picture delay, interpolated between its frames, NaN across dropped frames), lens distortion undone (the inverse of OpenCV's model, by iteration), left/right swaps of each further camera against camera 1 undone per frame (the labelling whose triangulation fits better by half), then linear triangulation of every point; points a camera sees more than 3% of its picture height away (or behind it) are dropped. MediaPipe's visibility is not used: the cameras' agreement decides. Hands are triangulated relative to the wrist; where only one camera has a hand, its MediaPipe hand (camera axes) is turned into the world. The result is a `LandmarkCache` in a level camera-1 frame (MediaPipe's axes: x right, y down, z away), with camera 1's pictures for the foot contacts, and a `TriangulationReport` (body share, median disagreement in px, swapped frames, hand sources).
+- **Solve** with All Cameras (on by default when there are several videos): every camera's cache and a calibration matching the current videos, Sync and lenses are needed, else Solve says which; the solver runs as for one camera with torso leveling off (`SolveSettings.level_by_torso`).
+
+Still to build: the floor from the triangulated feet when no floor shot was found (the body method already finds it).
 
 ### Target rigs
 

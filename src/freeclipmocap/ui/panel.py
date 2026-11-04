@@ -2,6 +2,7 @@ from collections.abc import Sequence
 
 import bpy
 
+from ..animation.ik_controls import has_ik_controls, ik_slider_names
 from ..constants.bone_roles import BODY_ROLES, LEFT_FINGER_ROLES, RIGHT_FINGER_ROLES, Role
 from ..rig.armature_bone_map import read_bone_map
 from .bone_map_operators import (
@@ -29,6 +30,7 @@ from .calibration_operators import (
 from .capture_operators import CancelCaptureOperator, CaptureOperator, capture_state
 from .compare_view import CompareViewOperator
 from .export_operators import ExportBvhOperator, ExportFbxOperator, current_take
+from .ik_operators import AddIkControlsOperator, MatchIkToFkOperator, RemoveIkControlsOperator
 from .solve_operator import SolveOperator
 from .video_operators import SetVideoFrameOperator, ShowVideoOperator
 
@@ -64,6 +66,8 @@ class MainPanel(bpy.types.Panel):
 
         solve_box = layout.box()
         solve_box.label(text="Solve", icon="POSE_HLT")
+        if properties.extra_videos:
+            solve_box.prop(properties, "use_all_cameras")
         solve_box.prop(properties, "smoothing", slider=True)
         solve_box.prop(properties, "root_motion")
         key_row = solve_box.row()
@@ -75,6 +79,7 @@ class MainPanel(bpy.types.Panel):
         compare_row = solve_box.row(align=True)
         compare_row.operator(CompareViewOperator.bl_idname, icon="VIEW_CAMERA")
         compare_row.prop(properties, "compare_lens_millimetres")
+        self._draw_ik(layout.box(), properties)
 
         export_box = layout.box()
         export_box.label(text="Export", icon="EXPORT")
@@ -83,6 +88,20 @@ class MainPanel(bpy.types.Panel):
         export_row = export_box.row(align=True)
         export_row.operator(ExportFbxOperator.bl_idname, text="FBX")
         export_row.operator(ExportBvhOperator.bl_idname, text="BVH")
+
+    def _draw_ik(self, box: bpy.types.UILayout, properties: bpy.types.PropertyGroup) -> None:
+        box.label(text="IK/FK", icon="CON_KINEMATIC")
+        armature_object = properties.target_armature
+        if armature_object is None or not has_ik_controls(armature_object):
+            box.operator(AddIkControlsOperator.bl_idname, icon="ADD")
+            return
+        column = box.column(align=True)
+        for slider_name in ik_slider_names(armature_object):
+            column.prop(armature_object, f'["{slider_name}"]', text=slider_name.removeprefix("IK "), slider=True)
+        box.label(text="0 = FK, 1 = IK (keyable)")
+        row = box.row(align=True)
+        row.operator(MatchIkToFkOperator.bl_idname, icon="FILE_REFRESH")
+        row.operator(RemoveIkControlsOperator.bl_idname, icon="TRASH")
 
     def _draw_camera_videos(self, box: bpy.types.UILayout, properties: bpy.types.PropertyGroup) -> None:
         if not properties.extra_videos:
@@ -227,9 +246,9 @@ class MainPanel(bpy.types.Panel):
         if job is not None and capture_state.is_running:
             progress = job.progress
             if progress.expected_frame_count > 0:
-                text = f"Frame {progress.frames_done} of {progress.expected_frame_count}"
+                text = f"{capture_state.camera_label}Frame {progress.frames_done} of {progress.expected_frame_count}"
             else:
-                text = f"Frame {progress.frames_done}"
+                text = f"{capture_state.camera_label}Frame {progress.frames_done}"
             box.progress(factor=progress.fraction, type="BAR", text=text)
             box.operator(CancelCaptureOperator.bl_idname, icon="CANCEL")
         else:

@@ -110,6 +110,21 @@ class GroundingTests(unittest.TestCase):
         self.assertGreater(float(np.ptp(in_place)), 0.7 * float(np.ptp(sway)))
         self.assertLess(abs(float(in_place.mean())), 0.005)
 
+    def test_planted_foot_tipped_by_the_tracker_is_flattened_without_bending_the_knee(self) -> None:
+        frame = {name: points.copy() for name, points in self.rest.items()}
+        pose = frame["pose"]
+        ankle = pose[pose_landmarks.LEFT_ANKLE]
+        for point in (pose_landmarks.LEFT_HEEL, pose_landmarks.LEFT_FOOT_INDEX):
+            pose[point] = ankle + rotation_about((1.0, 0.0, 0.0), 20.0) @ (pose[point] - ankle)
+        take = solve(make_cache([frame] * 10), self.rig, self.bone_map, MEDIAPIPE_TABLE, _NO_SMOOTHING)
+
+        for bone_name in ("mixamorig:LeftUpLeg", "mixamorig:LeftLeg", "mixamorig:LeftFoot"):
+            local = rotations.matrices_from_quaternions(take.rotations_by_bone[bone_name])
+            turn_degrees = np.degrees(np.arccos(np.clip((np.trace(local, axis1=-2, axis2=-1) - 1.0) / 2.0, -1.0, 1.0)))
+            self.assertLess(float(turn_degrees.max()), 0.5, bone_name)
+        heads = solved_joint_positions(self.rig, take)
+        self.assertLess(float(np.abs(heads[:, self.ankle_index("Left")] - self.rig.heads[self.ankle_index("Left")]).max()), 0.002)
+
     def test_still_actor_keeps_the_hips_at_rest(self) -> None:
         take = solve(make_cache([self.rest] * 10), self.rig, self.bone_map, MEDIAPIPE_TABLE, _NO_SMOOTHING)
         self.assertLess(float(np.abs(take.locations_by_bone[_HIPS]).max()), 1e-6)

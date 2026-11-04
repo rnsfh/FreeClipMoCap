@@ -176,6 +176,11 @@ def calibration_request(properties: bpy.types.PropertyGroup) -> tuple[list[Path]
     return video_paths, inputs
 
 
+def current_camera_setup(properties: bpy.types.PropertyGroup) -> CameraSetup | None:
+    video_paths, inputs = calibration_request(properties)
+    return find_current_setup(calibration_path_for(video_paths[0]), inputs)
+
+
 def describe_lens(
     camera: CalibratedCamera, saved_lens: SavedLens | None, typed_lens: TypedLens | None, typed_lens_is_kept: bool
 ) -> str:

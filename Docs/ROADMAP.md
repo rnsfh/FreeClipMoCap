@@ -89,6 +89,10 @@ Totals: single camera polished (0–3) ≈ 12–23 sessions ≈ 30–100 M token
 - [x] Bone-map presets: built-in Rigify on its FK controls, with Solve switching the rig to FK and the writer
       correcting for the rig's constraints (2026-11-03). Auto-Rig Pro, Unreal mannequin, VRoid/VRM: not chosen for now.
 - [x] Key reduction keeps planted feet within ~5 mm (tighter tolerance for hips and legs, 2026-11-03).
+- [x] Planted feet flattened on the floor, so a foot MediaPipe tips no longer bends the knee (2026-11-04): on the
+      user's take the lock's extra knee bend went from a median 22° to 0°.
+- [x] IK/FK switch: IK controls (target + pole empties) for legs and arms with a keyable IK/FK slider per limb;
+      IK at 1 plays the FK take within 0.25° until a target is moved (2026-11-04).
 - [ ] Tuning on several real clips (idle, taunt, two-hand swing, hit reaction, death).
 
 ## Phase 3: packaging
@@ -122,6 +126,10 @@ Totals: single camera polished (0–3) ≈ 12–23 sessions ≈ 30–100 M token
       poses from matched body joints, scale from the measured distance between the phones, floor from the feet.
 - [ ] First real calibration on the user's two phones (and the body method compared with the board on the same
       session).
-- [ ] Triangulation of 2D landmarks from several views; per-view confidence weighting.
-- [ ] UI for several videos.
+- [x] Triangulation of 2D landmarks from several views (2026-11-04): agreement between the cameras instead of
+      MediaPipe's visibility; left/right swaps undone; hands triangulated or from one camera. On the user's take the
+      solved body stands 2.8° from vertical (one camera: 10.3°), knees 9° / 6° (one camera: 36° / 33°).
+- [x] UI for several videos: Capture captures every camera; Solve's All Cameras checkbox (2026-11-04).
+- [ ] Single-camera depth repair: keep each joint on its 2D point and place it in depth with the lens and bone
+      lengths, only toward/away from MediaPipe (the user, 2026-11-04: after the multi-camera solve).
 - [ ] Floor from the triangulated feet when no floor shot was found (from the board: done with calibration).

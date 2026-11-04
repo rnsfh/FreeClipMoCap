@@ -6,6 +6,7 @@ import bpy
 import numpy as np
 
 from ..rig.armature_rest import rig_rest_from_armature
+from .ik_controls import ik_control_actions
 from .bvh_writer import write_bvh
 
 
@@ -42,10 +43,13 @@ def _shift_keys(action: bpy.types.Action, frames: float) -> None:
 
 
 @contextmanager
-def _take_named_and_starting_at_zero(scene: bpy.types.Scene, action: bpy.types.Action) -> Iterator[None]:
+def take_named_and_starting_at_zero(scene: bpy.types.Scene, armature_object: bpy.types.Object) -> Iterator[None]:
+    action = armature_object.animation_data.action
     offset = scene.frame_start
     scene_name = scene.name
-    _shift_keys(action, -offset)
+    shifted = [action, *ik_control_actions(armature_object)]
+    for shifted_action in shifted:
+        _shift_keys(shifted_action, -offset)
     scene.frame_start -= offset
     scene.frame_end -= offset
     scene.name = action.name
@@ -55,13 +59,14 @@ def _take_named_and_starting_at_zero(scene: bpy.types.Scene, action: bpy.types.A
         scene.name = scene_name
         scene.frame_end += offset
         scene.frame_start += offset
-        _shift_keys(action, offset)
+        for shifted_action in shifted:
+            _shift_keys(shifted_action, offset)
 
 
 def export_fbx(context: bpy.types.Context, armature_object: bpy.types.Object, path: Path) -> None:
     with (
         _only_selected(context, armature_object),
-        _take_named_and_starting_at_zero(context.scene, armature_object.animation_data.action),
+        take_named_and_starting_at_zero(context.scene, armature_object),
     ):
         bpy.ops.export_scene.fbx(
             filepath=str(path),

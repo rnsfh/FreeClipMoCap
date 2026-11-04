@@ -45,7 +45,11 @@ One person, whole body in the picture, camera on a tripod. [Docs/FILMING.md](Doc
    it, with the video behind the rig: play or scrub to see where the take strays from the actor. Set **Lens** to the
    camera you filmed with (26 mm, the default, is a phone's main camera). Turn Root Motion on before Solve if the
    actor moves around, or the rig stays put while the actor walks away.
-8. **Export:** **FBX** (built like a Mixamo clip, for game engines) or **BVH**, of the current take.
+8. **Fix by hand** (optional): press **Add IK Controls** to get a target empty at each foot and hand (and a pole
+   for each knee and elbow) that follows the take. With a limb's IK slider at 1, move its empties to change the
+   pose; 0 plays the solved FK keys. The sliders can be keyed.
+9. **Export:** **FBX** (built like a Mixamo clip, for game engines) or **BVH**, of the current take, as it plays
+   (IK included).
 
 ### The panel
 
@@ -59,16 +63,22 @@ One person, whole body in the picture, camera on a tripod. [Docs/FILMING.md](Doc
 | | Guess Bone Map | Guesses the map again (replaces your edits, after asking) |
 | | Bone Map | Every role and the bone that plays it; editable |
 | Capture | Pose Model | Heavy (most accurate, default), Full or Lite (faster previews) |
-| Solve | Smoothing | How strongly jitter is smoothed; fast moves stay sharp at any setting |
+| | Capture | Tracks every frame; with several cameras, every camera's video in turn |
+| Solve | All Cameras | With several cameras: solve from all of them, triangulated through the calibration (needs Capture and Calibrate). Off: camera 1 only |
+| | Smoothing | How strongly jitter is smoothed; fast moves stay sharp at any setting |
 | | Root Motion | Off (default): in place, the body still moves up and down and sways. On: the body travels as in the video |
 | | Fewer Keys / Tolerance | Keeps only the keys needed to stay within the tolerance (2° by default), so the take is easy to edit. Hips and legs are kept tighter so planted feet do not slide |
 | | Compare View / Lens | Fits a camera (`FreeClipMocap Camera`, updated on every press) to the video and shows the take through it, video behind the rig. Sets the render size to the video's. Lens: the filming camera's focal length, 35 mm equivalent |
-| Export | FBX / BVH | Exports the armature and its current take, without the mesh |
+| IK/FK | Add IK Controls | A target (foot/hand) and a pole (knee/elbow) empty per limb, following the take, in the collection `<armature> IK Controls` |
+| | Left Leg … Right Arm | Per limb: 0 = FK (the solved keys), 1 = IK (reaches for its target). Keyable |
+| | Match IK to FK | Keys the targets to follow the FK keys again (replaces your target moves) |
+| | Remove IK Controls | Deletes the empties and constraints; Keep the Pose bakes what you see into the FK keys first |
+| Export | FBX / BVH | Exports the armature and its current take as it plays (IK included), without the mesh |
 
 ### What Solve does for you
 
-- **Feet:** finds when a foot is planted (static camera needed), keeps it still on the floor with leg IK and moves
-  the hips up and down to match.
+- **Feet:** finds when a foot is planted (static camera needed), keeps it still and flat on the floor with leg IK
+  and moves the hips up and down to match.
 - **Hands:** fingers come from MediaPipe's hand tracker; short tracking gaps are blended, and fingers cannot bend
   in impossible ways.
 - **Clean-up:** jitter is smoothed, single frames where the tracker mixed up left and right are skipped, a tilted
@@ -78,8 +88,9 @@ One person, whole body in the picture, camera on a tripod. [Docs/FILMING.md](Doc
 
 ### Limits
 
-One camera sees depth poorly: moves toward or away from the camera flatten, and twists (forearm roll, turning the
-torso) are weak. Fast moves blur; small hands give jittery fingers. The result is a starting point to polish by hand.
+One camera sees depth poorly: moves toward or away from the camera flatten, twists (forearm roll, turning the
+torso) are weak, and the tracker may fold a straight body toward or away from the lens (bent knees, a lean). A
+second camera, calibrated, fixes most of it. Fast moves blur; small hands give jittery fingers. The result is a starting point to polish by hand.
 
 ### Troubleshooting
 

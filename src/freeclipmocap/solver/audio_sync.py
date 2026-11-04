@@ -4,6 +4,7 @@ import numpy as np
 
 _ENVELOPE_RATE = 1000.0
 _SMALLEST_ENERGY = 1e-10
+_NOISE_FLOOR_SHARE_OF_MEDIAN = 10.0
 _PEAK_EXCLUSION_SECONDS = 0.02
 
 
@@ -26,7 +27,10 @@ def onset_envelope(samples: np.ndarray, sample_rate: float) -> np.ndarray:
     boundaries = np.round(np.arange(hop_count + 1) * (sample_rate / _ENVELOPE_RATE)).astype(np.int64)
     summed_squares = np.concatenate(([0.0], np.cumsum(np.square(changes))))
     energy = np.diff(summed_squares[boundaries]) / np.diff(boundaries)
-    loudness = np.log(energy + _SMALLEST_ENERGY)
+    # A floor well above the take's typical (median) loudness, so hiss and its level changes in a quiet room make
+    # no onsets; only sounds that rise clearly above it, such as a clap, are matched.
+    noise_floor = max(float(np.median(energy)) * _NOISE_FLOOR_SHARE_OF_MEDIAN, _SMALLEST_ENERGY)
+    loudness = np.log(energy + noise_floor)
     onsets = np.maximum(np.diff(loudness, prepend=loudness[0]), 0.0)
     spread = onsets.std()
     return (onsets - onsets.mean()) / spread if spread > 0.0 else np.zeros_like(onsets)

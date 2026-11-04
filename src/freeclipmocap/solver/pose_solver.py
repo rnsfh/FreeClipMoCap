@@ -41,6 +41,7 @@ class SolveError(Exception):
 class SolveSettings:
     smoothing: float
     root_motion: bool = False
+    level_by_torso: bool = True
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -174,7 +175,7 @@ def solve(cache: LandmarkCache, rig: RigRest, bone_map: BoneMap, table: Tracking
         raise SolveError(f"The bone map misses required roles: {', '.join(role.value for role in missing_roles)}.")
 
     timestamps_seconds = (cache.timestamps_milliseconds - cache.timestamps_milliseconds[0]).astype(np.float64) / 1000.0
-    axes = _rig_axes(rig, bone_map)
+    axes = rig_axes(rig, bone_map)
     to_armature = _mediapipe_to_armature(axes)
     warnings: list[str] = []
     point_sets: dict[PointSet, np.ndarray] = {}
@@ -207,10 +208,12 @@ def solve(cache: LandmarkCache, rig: RigRest, bone_map: BoneMap, table: Tracking
     torso_up = _Solver(rig, bone_map, point_sets, axes).actor_vector(table.chest_direction)
     if torso_up is None:
         raise SolveError("The hips and shoulders were never clearly visible, so the body cannot be solved.")
-    median_torso_up = rotations.normalized(np.median(rotations.normalized(torso_up), axis=0))
-    leveling = rotations.rotation_between(median_torso_up, axes[RigAxis.UP])
-    camera_tilt_degrees = float(np.degrees(np.arccos(np.clip(np.dot(median_torso_up, axes[RigAxis.UP]), -1.0, 1.0))))
-    point_sets = {point_set: positions @ leveling.T for point_set, positions in point_sets.items()}
+    camera_tilt_degrees = 0.0
+    if settings.level_by_torso:
+        median_torso_up = rotations.normalized(np.median(rotations.normalized(torso_up), axis=0))
+        leveling = rotations.rotation_between(median_torso_up, axes[RigAxis.UP])
+        camera_tilt_degrees = float(np.degrees(np.arccos(np.clip(np.dot(median_torso_up, axes[RigAxis.UP]), -1.0, 1.0))))
+        point_sets = {point_set: positions @ leveling.T for point_set, positions in point_sets.items()}
 
     solver = _Solver(rig, bone_map, point_sets, axes)
     role_by_bone = {bone_name: role for role, bone_name in bone_map.bones_by_role.items()}
@@ -426,13 +429,15 @@ def _frame(
     return target_frame @ rig_frame.T @ rest_rotation, twist_strength
 
 
-def _rig_axes(rig: RigRest, bone_map: BoneMap) -> dict[RigAxis, np.ndarray]:
+def rig_axes(rig: RigRest, bone_map: BoneMap) -> dict[RigAxis, np.ndarray]:
     def head(role: Role) -> np.ndarray:
         return rig.heads[rig.index_of(str(bone_map.bone_for(role)))]
 
-    right = rotations.normalized(head(Role.RIGHT_UP_LEG) - head(Role.LEFT_UP_LEG))
-    up_direction = head(Role.HEAD) - head(Role.HIPS)
-    up = rotations.normalized(up_direction - np.dot(up_direction, right) * right)
+    # Up is the armature axis nearest to hips-to-head: a rest pose with the head ahead of the hips (4 cm on the
+    # user's rig) would otherwise lean every solved pose forward (3.7° there).
+    up = rotations.nearest_axis(head(Role.HEAD) - head(Role.HIPS))
+    right_direction = head(Role.RIGHT_UP_LEG) - head(Role.LEFT_UP_LEG)
+    right = rotations.normalized(right_direction - np.dot(right_direction, up) * up)
     back = np.cross(right, up)
     return {RigAxis.RIGHT: right, RigAxis.UP: up, RigAxis.BACK: back, RigAxis.FRONT: -back}
 

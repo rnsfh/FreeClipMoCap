@@ -16,12 +16,16 @@ class CaptureJob:
         self.cache: LandmarkCache | None = None
         self.error_message: str | None = None
         self.was_cancelled = False
+        self.camera_number = 1
         self._cancel_event = threading.Event()
         self._thread = threading.Thread(target=self._run, name="FreeClipMocap capture", daemon=True)
 
     @property
     def is_running(self) -> bool:
         return self._thread.is_alive()
+
+    def set_camera_number(self, camera_number: int) -> None:
+        self.camera_number = camera_number
 
     def start(self) -> None:
         self._thread.start()

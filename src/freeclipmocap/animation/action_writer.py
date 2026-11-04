@@ -50,10 +50,10 @@ def write_take(
             for axis in range(3)
         ]
         if key_tolerance_degrees is None:
-            _set_keys(fcurves, frames, locations, np.arange(take.frame_count))
+            set_keys(fcurves, frames, locations, np.arange(take.frame_count))
         else:
             tolerance = _LOCATION_TOLERANCE_SHARE_OF_HEIGHT * armature_object.data.bones[bone_name].head_local.length
-            _write_reduced_keys(
+            write_reduced_keys(
                 fcurves,
                 frames,
                 locations,
@@ -68,23 +68,33 @@ def write_take(
         else {}
     )
     for bone_name, quaternions in quaternions_by_bone.items():
-        pose_bone = armature_object.pose.bones[bone_name]
-        data_path, values = _channel_values(pose_bone, quaternions)
-        fcurves = _rotation_fcurves(action, armature_object, bone_name, data_path, values.shape[1])
-        if key_tolerance_degrees is None:
-            _set_keys(fcurves, frames, values, np.arange(take.frame_count))
-        else:
-            rotation_mode = pose_bone.rotation_mode
-            tolerance_degrees = tolerances_by_bone[bone_name]
-            _write_reduced_keys(
-                fcurves,
-                frames,
-                values,
-                select_key_frames(quaternions, tolerance_degrees),
-                lambda evaluated: angle_between_rotations(_as_quaternions(evaluated, rotation_mode), quaternions),
-                np.radians(tolerance_degrees),
-            )
+        write_bone_rotations(armature_object, action, bone_name, frames, quaternions, tolerances_by_bone.get(bone_name))
     return WrittenTake(action=action, unmatched_bones=unmatched_bones)
+
+
+def write_bone_rotations(
+    armature_object: bpy.types.Object,
+    action: bpy.types.Action,
+    bone_name: str,
+    frames: np.ndarray,
+    quaternions: np.ndarray,
+    tolerance_degrees: float | None,
+) -> None:
+    pose_bone = armature_object.pose.bones[bone_name]
+    data_path, values = _channel_values(pose_bone, quaternions)
+    fcurves = _rotation_fcurves(action, armature_object, bone_name, data_path, values.shape[1])
+    if tolerance_degrees is None:
+        set_keys(fcurves, frames, values, np.arange(len(frames)))
+        return
+    rotation_mode = pose_bone.rotation_mode
+    write_reduced_keys(
+        fcurves,
+        frames,
+        values,
+        select_key_frames(quaternions, tolerance_degrees),
+        lambda evaluated: angle_between_rotations(_as_quaternions(evaluated, rotation_mode), quaternions),
+        np.radians(tolerance_degrees),
+    )
 
 
 def key_tolerances(
@@ -158,7 +168,7 @@ def _intended_rotations(rig: RigRest, local_rotations: dict[str, np.ndarray], fr
 
 
 @contextmanager
-def _meshes_left_out(armature_object: bpy.types.Object) -> Iterator[None]:
+def meshes_left_out(armature_object: bpy.types.Object) -> Iterator[None]:
     hidden = [
         obj
         for obj in bpy.data.objects
@@ -181,7 +191,7 @@ def _evaluated_rotations(armature_object: bpy.types.Object, bone_names: list[str
     scene = bpy.context.scene
     frame_before = scene.frame_current
     evaluated = {bone_name: np.empty((len(frames), 3, 3)) for bone_name in bone_names}
-    with _meshes_left_out(armature_object):
+    with meshes_left_out(armature_object):
         try:
             for frame_index, frame in enumerate(frames):
                 scene.frame_set(int(frame))
@@ -203,7 +213,7 @@ def _write_every_frame(
     quaternions = rotations.make_continuous(rotations.quaternions_from_matrices(local))
     data_path, values = _channel_values(armature_object.pose.bones[bone_name], quaternions)
     fcurves = _rotation_fcurves(action, armature_object, bone_name, data_path, values.shape[1])
-    _set_keys(fcurves, frames, values, np.arange(len(frames)))
+    set_keys(fcurves, frames, values, np.arange(len(frames)))
 
 
 def _rotation_fcurves(
@@ -215,7 +225,7 @@ def _rotation_fcurves(
     ]
 
 
-def _write_reduced_keys(
+def write_reduced_keys(
     fcurves: list[bpy.types.FCurve],
     frames: np.ndarray,
     values: np.ndarray,
@@ -224,16 +234,16 @@ def _write_reduced_keys(
     tolerance: float,
 ) -> None:
     for _refinement_pass in range(_MAXIMUM_REFINEMENT_PASSES):
-        _set_keys(fcurves, frames, values, key_indices)
+        set_keys(fcurves, frames, values, key_indices)
         evaluated = np.array([[fcurve.evaluate(frame) for fcurve in fcurves] for frame in frames])
         worst_frames = worst_frames_of_each_run(errors_of(evaluated), tolerance)
         if len(worst_frames) == 0:
             return
         key_indices = np.union1d(key_indices, worst_frames)
-    _set_keys(fcurves, frames, values, np.arange(len(frames)))
+    set_keys(fcurves, frames, values, np.arange(len(frames)))
 
 
-def _set_keys(fcurves: list[bpy.types.FCurve], frames: np.ndarray, values: np.ndarray, key_indices: np.ndarray) -> None:
+def set_keys(fcurves: list[bpy.types.FCurve], frames: np.ndarray, values: np.ndarray, key_indices: np.ndarray) -> None:
     for channel_index, fcurve in enumerate(fcurves):
         coordinates = np.empty(2 * len(key_indices), dtype=np.float64)
         coordinates[0::2] = frames[key_indices]

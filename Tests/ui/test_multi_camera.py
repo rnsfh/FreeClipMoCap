@@ -27,8 +27,10 @@ from bl_ext.user_default.freeclipmocap.capture.camera_setup import TypedLens
 from bl_ext.user_default.freeclipmocap.ui.properties import MEASURE_LENS_IDENTIFIER, TYPED_LENS_IDENTIFIER
 from bl_ext.user_default.freeclipmocap.ui.phone_cameras import phone_camera_name
 
+from ..animation.test_action_writer import create_armature
 from ..capture import body_fixtures
 from ..capture import calibration_fixtures as fixtures
+from ..solver.synthetic_actor import make_rig
 from ..solver.test_audio_sync import room_sound
 
 _POINTS = np.array([[0.0, 0.0, 1.0], [0.3, 0.2, 0.2], [-0.2, -0.1, 1.5], [0.1, 0.3, 0.8]])
@@ -147,7 +149,7 @@ class MultiCameraTests(unittest.TestCase):
         self.assertEqual(inputs.typed_lenses, (None, TypedLens(23.0, True)))
         self.assertEqual(inputs.saved_lenses, (None, None))
 
-    def test_calibrating_from_the_body_uses_each_video_s_landmarks(self) -> None:
+    def synthetic_take_for_the_body(self) -> None:
         front_video = self.folder / "front.mp4"
         side_video = self.folder / "side.mp4"
         front_video.write_bytes(b"stand-in front video")
@@ -159,18 +161,31 @@ class MultiCameraTests(unittest.TestCase):
         side.video_path = str(side_video)
         side.started_later_seconds = body_fixtures.SIDE_STARTED_LATER_SECONDS
         self.properties.calibration_method = "BODY"
-        with self.assertRaisesRegex(CalibrationRequestError, "Camera 1: calibrating from the body needs its lens"):
-            calibration_request(self.properties)
-        for settings, filmed in ((self.properties, body_fixtures.FRONT_CAMERA), (side, body_fixtures.SIDE_CAMERA)):
+
+    def type_the_lenses_and_distance(self) -> None:
+        for settings, filmed in (
+            (self.properties, body_fixtures.FRONT_CAMERA),
+            (self.properties.extra_videos[0], body_fixtures.SIDE_CAMERA),
+        ):
             settings.calibration_lens = TYPED_LENS_IDENTIFIER
             settings.calibration_focal_length_millimetres = filmed.focal_length_pixels * FULL_FRAME_WIDTH_MILLIMETRES / fixtures.WIDTH
         apart = np.linalg.norm(body_fixtures.SIDE_CAMERA.position - body_fixtures.FRONT_CAMERA.position)
         self.properties.cameras_apart_metres = float(apart)
+
+    def calibrated_job(self) -> CalibrationJob:
         video_paths, inputs = calibration_request(self.properties)
         job = CalibrationJob(video_paths, inputs, calibration_path_for(video_paths[0]), MODELS_FOLDER)
-
         job.start()
         job.wait(300.0)
+        return job
+
+    def test_calibrating_from_the_body_uses_each_video_s_landmarks(self) -> None:
+        self.synthetic_take_for_the_body()
+        with self.assertRaisesRegex(CalibrationRequestError, "Camera 1: calibrating from the body needs its lens"):
+            calibration_request(self.properties)
+        self.type_the_lenses_and_distance()
+
+        job = self.calibrated_job()
 
         self.assertIsNone(job.error_message)
         message = describe_setup(job.setup)
@@ -178,6 +193,31 @@ class MultiCameraTests(unittest.TestCase):
         self.assertIn("mm (typed)", message)
         for calibrated, filmed in zip(job.setup.cameras, (body_fixtures.FRONT_CAMERA, body_fixtures.SIDE_CAMERA)):
             self.assertLess(np.linalg.norm(calibrated.position - filmed.position), 0.04)
+
+    def test_solve_with_all_cameras_triangulates_the_calibrated_take(self) -> None:
+        self.synthetic_take_for_the_body()
+        self.type_the_lenses_and_distance()
+        rig, _bone_map = make_rig()
+        bones = [
+            (name, None if parent < 0 else rig.bone_names[parent], tuple(head), tuple(tail))
+            for name, parent, head, tail in zip(rig.bone_names, rig.parent_indices, rig.heads, rig.tails)
+        ]
+        self.properties.target_armature = create_armature("TriangulatedRig", bones)
+        self.properties.smoothing = 0.5
+        self.properties.video_end_frame = 120
+        self.assertTrue(self.properties.use_all_cameras)
+        with self.assertRaisesRegex(RuntimeError, "not calibrated"):
+            bpy.ops.freeclipmocap.solve()
+
+        self.assertIsNone(self.calibrated_job().error_message)
+        self.assertEqual(bpy.ops.freeclipmocap.solve(), {"FINISHED"})
+
+        armature_object = self.properties.target_armature
+        self.assertEqual(armature_object.animation_data.action.name, "front")
+        bpy.context.scene.frame_set(60)
+        for side in ("Left", "Right"):
+            knee = armature_object.pose.bones[f"mixamorig:{side}Leg"]
+            self.assertLess(np.degrees(knee.rotation_quaternion.angle), 12.0, side)
 
     def test_separate_calibration_videos_must_all_be_chosen(self) -> None:
         front_video, side_video = fixtures.shared_calibration_videos()
