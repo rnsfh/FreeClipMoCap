@@ -120,8 +120,10 @@ Totals: single camera polished (0–3) ≈ 12–23 sessions ≈ 30–100 M token
       Simplified Software License (GPL compatibility not settled).
 - [x] Repository public at https://github.com/rnsfh/FreeClipMoCap, linked as `website` in the manifest (2026-11-04).
 - [ ] Store page: icon, featured image, screenshots (the user, later), description (stating the MediaPipe change).
-- [ ] Submit 0.2.0 to extensions.blender.org (the user's decision, 2026-11-04: submit despite the open IPP question;
-      multi-camera ships unlabelled; the offline test from PRIVACY.md is skipped for this release).
+- [x] Submitted 0.2.0 to extensions.blender.org for approval (2026-11-04; the user's decision: submit despite the
+      open IPP question; multi-camera ships unlabelled; the offline test from PRIVACY.md is skipped for this release).
+- [ ] Approval: answer the moderators' questions (likely: Intel IPP in OpenCV; fallback is an OpenCV build without
+      IPP).
 
 ## Phase 4: multi-camera
 
