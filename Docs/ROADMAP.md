@@ -118,8 +118,10 @@ Totals: single camera polished (0–3) ≈ 12–23 sessions ≈ 30–100 M token
       cards. The build checks all of these.
 - [ ] Open licence question before submitting: OpenCV's wheel statically links Intel IPP ICV under the Intel
       Simplified Software License (GPL compatibility not settled).
-- [ ] Store page: icon, featured image, screenshots, description (stating the MediaPipe change).
-- [ ] Submit to extensions.blender.org.
+- [x] Repository public at https://github.com/rnsfh/FreeClipMoCap, linked as `website` in the manifest (2026-11-04).
+- [ ] Store page: icon, featured image, screenshots (the user, later), description (stating the MediaPipe change).
+- [ ] Submit 0.2.0 to extensions.blender.org (the user's decision, 2026-11-04: submit despite the open IPP question;
+      multi-camera ships unlabelled; the offline test from PRIVACY.md is skipped for this release).
 
 ## Phase 4: multi-camera
 

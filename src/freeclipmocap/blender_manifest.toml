@@ -7,6 +7,8 @@ tagline = "Markerless motion capture from video onto any humanoid rig"
 maintainer = "Chevchellioos"
 type = "add-on"
 
+website = "https://github.com/rnsfh/FreeClipMoCap"
+
 tags = ["Animation"]
 
 blender_version_min = "5.2.0"
